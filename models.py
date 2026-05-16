@@ -30,7 +30,6 @@ class User(Base):
         back_populates="user",
         cascade="all, delete-orphan",
     )
-    
 
     @property
     def image_path(self) -> str:
@@ -54,6 +53,8 @@ class Post(Base):
         DateTime(timezone=True),
         default=lambda: datetime.now(UTC),
     )
+
+    likes: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
 
     author: Mapped[User] = relationship(back_populates="posts")
 
