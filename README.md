@@ -18,6 +18,7 @@ This project started as a simple blog page and has grown into a real web app wit
 - Lets users change their password from the account page.
 - Supports forgot-password and reset-password pages.
 - Stores reset tokens hashed in the database.
+- Tracks a `likes` counter on post records.
 - Seeds the database with users, posts, and local profile images.
 - Serves static assets from `static/` and uploaded profile images from `media/`.
 - Returns JSON errors for `/api/...` routes and HTML error pages for browser routes.
@@ -28,8 +29,9 @@ This project started as a simple blog page and has grown into a real web app wit
 | --- | --- |
 | Backend | Python 3.12, FastAPI |
 | Server | Uvicorn / FastAPI standard CLI |
-| Database | SQLite with async SQLAlchemy |
+| Database | PostgreSQL or SQLite through `DATABASE_URL` with async SQLAlchemy |
 | ORM | SQLAlchemy 2.x async models and sessions |
+| Migrations | Alembic |
 | Validation | Pydantic |
 | Auth | JWT, OAuth2 password form, pwdlib Argon2 password hashing |
 | Templates | Jinja2 |
@@ -41,9 +43,9 @@ This project started as a simple blog page and has grown into a real web app wit
 ## Project Structure
 
 ```text
-fastapi-blog2/
+fastapi-blog-postgres/
 ├── main.py                         # App setup, HTML page routes, error handlers
-├── database.py                     # Async SQLite engine/session setup
+├── database.py                     # Async SQLAlchemy engine/session setup
 ├── models.py                       # SQLAlchemy User, Post, PasswordResetToken models
 ├── schemas.py                      # Pydantic request/response models
 ├── auth.py                         # Password hashing, JWT, reset-token hashing, current-user dependency
@@ -75,6 +77,11 @@ fastapi-blog2/
 │   └── profile_pics/profile.jpeg   # Default profile image
 ├── media/profile_pics/             # Uploaded/generated profile pictures
 ├── populate_images/                # Local seed images used by populate_db.py
+├── alembic/                        # Alembic migration environment and revisions
+│   └── versions/
+│       ├── f7215e176098_initial_migration.py
+│       └── 8e6c5e513b71_added_likes_func.py
+├── alembic.ini
 ├── pyproject.toml
 └── uv.lock
 ```
@@ -127,7 +134,7 @@ fastapi-blog2/
 ## Requirements
 
 - Python 3.12+
-- SQLite, included with Python
+- PostgreSQL for the current async Postgres setup, or SQLite if you point `DATABASE_URL` at an async SQLite URL
 - A terminal
 - Optional: an SMTP service if you want real password reset emails
 
@@ -162,12 +169,25 @@ touch .env
 Add at least this:
 
 ```env
+DATABASE_URL=postgresql+asyncpg://postgres:postgres@localhost:5432/fastapi_blog
 SECRET_KEY=change-this-to-a-long-random-secret
 ALGORITHM=HS256
 ACCESS_TOKEN_EXPIRE_MINUTES=30
 POSTS_PER_PAGE=10
 RESET_TOKEN_EXPIRE_MINUTES=60
 FRONTEND_URL=http://localhost:8000
+```
+
+For quick local SQLite development, use:
+
+```env
+DATABASE_URL=sqlite+aiosqlite:///./blog.db
+```
+
+Run migrations:
+
+```bash
+uv run alembic upgrade head
 ```
 
 Run the app:
@@ -200,7 +220,7 @@ source .venv/bin/activate
 Install the dependencies:
 
 ```bash
-pip install "fastapi[standard]" sqlalchemy aiosqlite greenlet pydantic-settings pyjwt "pwdlib[argon2]" pillow httpx aiosmtplib
+pip install "fastapi[standard]" sqlalchemy alembic asyncpg "psycopg[binary]" aiosqlite greenlet pydantic-settings pyjwt "pwdlib[argon2]" pillow httpx aiosmtplib
 ```
 
 Create `.env`:
@@ -212,12 +232,19 @@ touch .env
 Add:
 
 ```env
+DATABASE_URL=postgresql+asyncpg://postgres:postgres@localhost:5432/fastapi_blog
 SECRET_KEY=change-this-to-a-long-random-secret
 ALGORITHM=HS256
 ACCESS_TOKEN_EXPIRE_MINUTES=30
 POSTS_PER_PAGE=10
 RESET_TOKEN_EXPIRE_MINUTES=60
 FRONTEND_URL=http://localhost:8000
+```
+
+Run migrations:
+
+```bash
+alembic upgrade head
 ```
 
 Run:
@@ -228,22 +255,16 @@ uvicorn main:app --reload
 
 ## Database
 
-The app uses SQLite:
+The app reads its async database URL from `.env` through `config.py`:
 
 ```text
-blog.db
+DATABASE_URL=postgresql+asyncpg://postgres:postgres@localhost:5432/fastapi_blog
 ```
 
-The async database URL is defined in `database.py`:
-
-```text
-sqlite+aiosqlite:///./blog.db
-```
-
-Tables are created automatically when the FastAPI app starts:
+The database engine is created in `database.py`:
 
 ```python
-await conn.run_sync(Base.metadata.create_all)
+engine = create_async_engine(settings.database_url)
 ```
 
 Current tables:
@@ -252,7 +273,34 @@ Current tables:
 - `posts`
 - `password_reset_tokens`
 
-There is no migration tool yet. If you change models during development and SQLite does not match the new schema, the simplest development reset is to delete `blog.db` and run the app or seed script again.
+The `posts` table includes a `likes` column with a default value of `0`.
+
+## Migrations
+
+Alembic is configured in `alembic/`. The migration environment reads `DATABASE_URL` from `.env`, so migration commands target the same database as the app.
+
+Current revisions:
+
+- `f7215e176098_initial_migration.py` creates `users`, `posts`, and `password_reset_tokens`.
+- `8e6c5e513b71_added_likes_func.py` adds `posts.likes`.
+
+Apply migrations:
+
+```bash
+uv run alembic upgrade head
+```
+
+Create a new autogenerated migration after changing SQLAlchemy models:
+
+```bash
+uv run alembic revision --autogenerate -m "describe change"
+```
+
+Rollback one migration:
+
+```bash
+uv run alembic downgrade -1
+```
 
 ## Seeding The Database
 
@@ -448,6 +496,12 @@ Run with `uv`:
 uv run uvicorn main:app --reload
 ```
 
+Apply database migrations:
+
+```bash
+uv run alembic upgrade head
+```
+
 Seed database:
 
 ```bash
@@ -537,10 +591,17 @@ If the JS import is cached, hard refresh the page.
 
 ### Database schema looks stale
 
-This project currently uses `Base.metadata.create_all`, not migrations. During development, if the schema changes and SQLite still has the old table shape, reset with:
+Run the latest Alembic migrations:
+
+```bash
+uv run alembic upgrade head
+```
+
+If you are using SQLite for throwaway development and want a clean reset, remove the local database and run migrations again:
 
 ```bash
 rm blog.db
+uv run alembic upgrade head
 python populate_db.py
 ```
 
@@ -548,21 +609,18 @@ Only do this if you are okay losing local data.
 
 ## Current Limitations
 
-- SQLite is used for local development.
-- No Alembic migrations yet.
+- Post `likes` are stored in the database model, but there is not yet a like/unlike API or frontend button.
 - Password reset requires SMTP configuration for real email delivery.
 - Tests are not set up yet.
 - Deployment/Docker setup is not included yet.
 
 ## Roadmap Ideas
 
-- Add Alembic migrations.
 - Add automated tests for auth, posts, and password reset.
 - Add Docker and deployment configuration.
 - Add richer post editing UI.
-- Add comments or likes.
+- Add comments and a complete like/unlike workflow.
 - Add production email provider configuration.
-- Move from SQLite to PostgreSQL for deployment.
 
 ## Author
 
