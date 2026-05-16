@@ -279,7 +279,7 @@ The `posts` table includes a `likes` column with a default value of `0`.
 
 Alembic is configured in `alembic/`. The migration environment reads `DATABASE_URL` from `.env`, so migration commands target the same database as the app.
 
-Current revisions:
+Current revisions:.... 
 
 - `f7215e176098_initial_migration.py` creates `users`, `posts`, and `password_reset_tokens`.
 - `8e6c5e513b71_added_likes_func.py` adds `posts.likes`.
