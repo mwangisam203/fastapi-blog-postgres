@@ -47,6 +47,7 @@ from auth import (
 
 from email_utils import send_password_reset_email
 
+from botocore.exceptions import ClientError
 from sqlalchemy import delete as sql_delete
 
 from config import settings
