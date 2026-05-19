@@ -3,11 +3,13 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import httpx
+from botocore.exceptions import BotoCoreError, ClientError
 from sqlalchemy import delete, select, update
 
 import models
+from config import settings
 from database import AsyncSessionLocal, engine
-from image_utils import PROFILE_PICS_DIR
+from image_utils import _get_s3_client
 from main import app
 
 POPULATE_IMAGES_DIR = Path("populate_images")
@@ -289,15 +291,20 @@ POST_51 = {
 
 
 async def clear_existing_data() -> None:
-    # Delete profile pictures from local storage
-    if PROFILE_PICS_DIR.exists():
-        for file in PROFILE_PICS_DIR.iterdir():
-            if file.is_file() and file.name != ".gitkeep":
-                file.unlink()
-        print(f"Deleted profile pictures from {PROFILE_PICS_DIR}")
-
-    # Clear database tables (order respects foreign keys)
     async with AsyncSessionLocal() as db:
+        result = await db.execute(select(models.User.image_file))
+        image_files = [
+            image_file for image_file in result.scalars().all() if image_file
+        ]
+
+        s3 = _get_s3_client()
+        for image_file in image_files:
+            key = f"profile_pics/{image_file}"
+            try:
+                s3.delete_object(Bucket=settings.s3_bucket_name, Key=key)
+            except (BotoCoreError, ClientError) as err:
+                print(f"Could not delete profile picture from S3: {image_file} ({err})")
+
         await db.execute(delete(models.Post))
         await db.execute(delete(models.User))
         await db.commit()
@@ -349,7 +356,7 @@ async def populate() -> None:
         users: list[dict] = []
 
         print(f"\nCreating {len(USERS)} users...")
-        for user_data in USERS:                                     # FIX 3: entire block is inside this loop
+        for user_data in USERS:  # FIX 3: entire block is inside this loop
             response = await client.post(
                 "/api/users",
                 json={
@@ -409,7 +416,7 @@ async def populate() -> None:
                         response.raise_for_status()
                         print(f"    Uploaded: {image_name}")
 
-            users.append(                                           # FIX 3: also inside the loop now
+            users.append(  # FIX 3: also inside the loop now
                 {"id": user["id"], "username": user["username"], "token": token},
             )
 
@@ -438,9 +445,11 @@ async def populate() -> None:
             response.raise_for_status()
             title = post_data["title"]
             print(
-                f"  Created: '{title[:50]}...'"
-                if len(title) > 50
-                else f"  Created: '{title}'",
+                (
+                    f"  Created: '{title[:50]}...'"
+                    if len(title) > 50
+                    else f"  Created: '{title}'"
+                ),
             )
 
         print("\nUpdating post dates...")
