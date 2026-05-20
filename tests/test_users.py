@@ -84,3 +84,24 @@ async def test_upload_profile_picture(client: AsyncClient, mocked_aws):
     assert "Contents" in s3_objects
     assert len(s3_objects["Contents"]) == 1
     assert s3_objects["Contents"][0]["Key"].endswith(data["image_file"])
+
+
+@pytest.mark.anyio
+async def test_forgot_password_sends_email(client: AsyncClient):
+    await create_test_user(client)
+
+    with patch(
+        "routers.users.send_password_reset_email",
+        new_callable=AsyncMock,
+    ) as mock_send:
+        response = await client.post(
+            "/api/users/forgot-password",
+            json={"email": "test@example.com"},
+        )
+
+        assert response.status_code == 202
+        mock_send.assert_awaited_once()
+        call_kwargs = mock_send.call_args.kwargs
+        assert call_kwargs["to_email"] == "test@example.com"
+        assert call_kwargs["username"] == "testuser"
+        assert "token" in call_kwargs
