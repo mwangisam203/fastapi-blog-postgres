@@ -1,0 +1,228 @@
+
+# VPS Setup Guide - Ubuntu 24.04 LTS
+# Last Updated: January 2026
+
+This is my barebones VPS setup for hosting web applications.
+It covers security hardening, web server setup, and FastAPI deployment.
+
+================================================================================
+PART 1: BASE VPS SECURITY SETUP
+================================================================================
+
+## Create Linode Server (or any VPS provider)
+
+    -> Create Linode
+    -> Latest version of Ubuntu (24.04 LTS)
+    -> Choose Region (I chose Dallas, TX "us-central")
+    -> Choose a Linode Plan (Shared CPU with 1GB RAM for $5/mo works for small sites)
+    -> Give it a label (e.g., fastapi-blog)
+    -> Use a Strong Root Password
+    -> Create Linode
+
+This will give you a public IP address to login to the server.
+
+--------------------------------------------------------------------------------
+
+## Initial Login and System Update
+
+    -> Copy your Public IP from the dashboard
+    -> Login as root (first and last time!)
+        ssh root@YOUR_IP_ADDRESS
+
+    -> Update the system
+        apt update && apt upgrade -y
+
+        # You may be prompted about modified config files (like /etc/ssh/sshd_config).
+        # Since this is a fresh install, accept the maintainer's version.
+
+--------------------------------------------------------------------------------
+
+## Create Non-Root User
+
+    -> Create a new user
+        adduser coreyms
+        # Enter a strong password when prompted
+
+    -> Grant sudo privileges
+        usermod -aG sudo coreyms
+
+    -> Verify the user has sudo
+        groups coreyms
+        # Should show: coreyms : coreyms sudo
+
+--------------------------------------------------------------------------------
+
+## Set Up SSH Key Authentication (Do this BEFORE disabling password auth!)
+
+    -> On your LOCAL machine (not the server!), generate an Ed25519 key:
+        ssh-keygen -t ed25519 -C "YourName - DeviceName - Date"
+
+        # The -C comment gets embedded in the public key. When you view
+        # authorized_keys on the server, you'll see who/what is allowed to connect.
+        # Example:
+        ssh-keygen -t ed25519 -C "CoreyMS - MacBook Pro - 2025-01"
+
+    -> When prompted for file location, use a descriptive name:
+        /Users/yourname/.ssh/id_ed25519_fastapiblog_macbookpro
+
+        # Format: id_ed25519_<server>_<device>
+        # This way you know which server and which device at a glance
+
+    -> Enter a strong passphrase (protects the key if your machine is compromised)
+
+    -> Copy the public key to your server (still on local machine):
+        ssh-copy-id -i ~/.ssh/id_ed25519_fastapiblog_macbookpro coreyms@YOUR_IP_ADDRESS
+        # Enter the password for coreyms when prompted
+
+    -> Add the key to your SSH agent (so you don't have to specify -i every time):
+        ssh-add ~/.ssh/id_ed25519_fastapiblog_macbookpro
+
+    -> Test login with the new user (IMPORTANT: Do this before disabling password auth!)
+        ssh coreyms@YOUR_IP_ADDRESS
+        # Should log in without asking for password (may ask for key passphrase)
+
+    -> Verify SSH directory permissions on the server (ssh-copy-id usually sets these,
+       but SSH is strict - it won't work if permissions are too open):
+        chmod 700 ~/.ssh
+        chmod 600 ~/.ssh/*
+
+    -> If it works, you can now exit and continue as the new user
+
+--------------------------------------------------------------------------------
+
+## Harden SSH Configuration
+
+    -> Now logged in as your non-root user, edit the SSH config:
+        sudo nano /etc/ssh/sshd_config
+
+    -> Find and change these settings (uncomment if needed):
+
+        # Disable root login entirely
+        PermitRootLogin no
+
+        # Ensure public key authentication is enabled
+        PubkeyAuthentication yes
+
+        # Disable password authentication (keys only!)
+        PasswordAuthentication no
+
+        # Disable empty passwords
+        PermitEmptyPasswords no
+
+        # Disable challenge-response (another password method)
+        KbdInteractiveAuthentication no
+
+    -> Save and exit (Ctrl+X, Y, Enter)
+
+    -> Restart SSH service
+        sudo systemctl restart ssh
+
+    -> IMPORTANT: Before closing your current session, open a NEW terminal and test:
+        ssh coreyms@YOUR_IP_ADDRESS
+        # If this works, you're safe. If not, use your current session to fix it!
+
+--------------------------------------------------------------------------------
+
+## Set Timezone
+
+    -> Check current timezone
+        timedatectl status
+
+    -> List available timezones (optional)
+        timedatectl list-timezones
+        timedatectl list-timezones | grep America
+
+    -> Set your timezone (I use UTC for servers, but use your preference)
+        sudo timedatectl set-timezone UTC
+
+        # Or for a specific region:
+        # sudo timedatectl set-timezone America/Chicago
+
+    -> Verify
+        timedatectl status
+
+--------------------------------------------------------------------------------
+
+## Configure Hostname
+
+    -> Set hostname
+        sudo hostnamectl set-hostname fastapi-blog
+
+    -> Verify
+        hostname
+
+    -> Add to hosts file
+        sudo nano /etc/hosts
+
+    -> Add this line under 127.0.0.1 (use your server's public IP, not your local IP):
+        YOUR_SERVER_IP fastapi-blog
+
+    -> Save and exit
+
+--------------------------------------------------------------------------------
+
+## Set Up Firewall (UFW)
+
+    -> Install UFW (usually pre-installed on Ubuntu)
+        sudo apt install ufw -y
+
+    -> Set default policies
+        sudo ufw default deny incoming
+        sudo ufw default allow outgoing
+
+    -> Allow SSH (do this BEFORE enabling!)
+        sudo ufw allow ssh
+
+    -> Allow HTTP and HTTPS
+        sudo ufw allow 80/tcp
+        sudo ufw allow 443/tcp
+
+    -> Enable the firewall
+        sudo ufw enable
+        # Type 'y' to confirm
+
+    -> Verify status
+        sudo ufw status verbose
+
+--------------------------------------------------------------------------------
+
+## Set Up Fail2Ban (Brute Force Protection)
+
+    -> Install Fail2Ban
+        sudo apt install fail2ban -y
+
+    -> Create local config files (never edit the .conf files directly)
+        sudo cp /etc/fail2ban/fail2ban.conf /etc/fail2ban/fail2ban.local
+        sudo cp /etc/fail2ban/jail.conf /etc/fail2ban/jail.local
+
+    -> Edit the jail.local config
+        sudo nano /etc/fail2ban/jail.local
+
+    -> Find the [DEFAULT] section and set banaction to use UFW:
+        [DEFAULT]
+        # Use UFW for banning instead of raw iptables (keeps everything in one place)
+        banaction = ufw
+
+    -> Optional: Add your IP to the ignore list (still in [DEFAULT] section):
+        ignoreip = 127.0.0.1/8 ::1 YOUR_HOME_IP
+
+    -> Find the [sshd] section and ensure these values:
+        [sshd]
+        enabled = true
+        port = ssh
+        filter = sshd
+        maxretry = 3
+        bantime = 1h
+        findtime = 10m
+        logpath = %(sshd_log)s
+        backend = %(sshd_backend)s
+
+    -> Save and exit
+
+    -> Start and enable Fail2Ban
+        sudo systemctl start fail2ban
+        sudo systemctl enable fail2ban
+        sudo systemctl status fail2ban
+
+    -> Check banned IPs (after some time)
+        sudo fail2ban-client status sshd
