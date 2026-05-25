@@ -1,0 +1,80 @@
+cat > ~/fastapi-blog-postgres/.dockerignore << 'EOF'
+# Python
+.venv/
+venv/
+env/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+dist/
+build/
+*.egg
+
+# Environment variables
+.env
+.env.*
+!.env.docker
+
+# Database
+*.db
+*.sqlite3
+
+# Git
+.git/
+.gitignore
+.gitattributes
+
+# Testing
+tests/
+.pytest_cache/
+.coverage
+htmlcov/
+coverage.xml
+
+# Migrations versions
+migrations/versions/
+
+# Development tools
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS files
+.DS_Store
+Thumbs.db
+.AppleDouble
+.LSOverride
+*~
+
+# Logs
+*.log
+logs/
+
+# Docker files themselves
+Dockerfile
+docker-compose.yml
+docker-compose.*.yml
+.dockerignore
+
+# Documentation
+*.md
+README*
+docs/
+
+# Populate script and images
+populate_db.py
+populate_images/
+
+# Node
+node_modules/
+npm-debug.log
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+EOF
