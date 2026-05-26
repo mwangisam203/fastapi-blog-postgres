@@ -40,15 +40,15 @@ This will give you a public IP address to login to the server.
 ## Create Non-Root User
 
     -> Create a new user
-        adduser coreyms
+        adduser deploy
         # Enter a strong password when prompted
 
     -> Grant sudo privileges
-        usermod -aG sudo coreyms
+        usermod -aG sudo deploy
 
     -> Verify the user has sudo
-        groups coreyms
-        # Should show: coreyms : coreyms sudo
+        groups deploy
+        # Should show: deploy : deploy sudo
 
 --------------------------------------------------------------------------------
 
@@ -60,7 +60,7 @@ This will give you a public IP address to login to the server.
         # The -C comment gets embedded in the public key. When you view
         # authorized_keys on the server, you'll see who/what is allowed to connect.
         # Example:
-        ssh-keygen -t ed25519 -C "CoreyMS - MacBook Pro - 2025-01"
+        ssh-keygen -t ed25519 -C "FastAPI Blog - Laptop - 2026-01"
 
     -> When prompted for file location, use a descriptive name:
         /Users/yourname/.ssh/id_ed25519_fastapiblog_macbookpro
@@ -71,14 +71,14 @@ This will give you a public IP address to login to the server.
     -> Enter a strong passphrase (protects the key if your machine is compromised)
 
     -> Copy the public key to your server (still on local machine):
-        ssh-copy-id -i ~/.ssh/id_ed25519_fastapiblog_macbookpro coreyms@YOUR_IP_ADDRESS
-        # Enter the password for coreyms when prompted
+        ssh-copy-id -i ~/.ssh/id_ed25519_fastapiblog_macbookpro deploy@YOUR_IP_ADDRESS
+        # Enter the password for deploy when prompted
 
     -> Add the key to your SSH agent (so you don't have to specify -i every time):
         ssh-add ~/.ssh/id_ed25519_fastapiblog_macbookpro
 
     -> Test login with the new user (IMPORTANT: Do this before disabling password auth!)
-        ssh coreyms@YOUR_IP_ADDRESS
+        ssh deploy@YOUR_IP_ADDRESS
         # Should log in without asking for password (may ask for key passphrase)
 
     -> Verify SSH directory permissions on the server (ssh-copy-id usually sets these,
@@ -118,7 +118,7 @@ This will give you a public IP address to login to the server.
         sudo systemctl restart ssh
 
     -> IMPORTANT: Before closing your current session, open a NEW terminal and test:
-        ssh coreyms@YOUR_IP_ADDRESS
+        ssh deploy@YOUR_IP_ADDRESS
         # If this works, you're safe. If not, use your current session to fix it!
 
 --------------------------------------------------------------------------------
@@ -226,3 +226,255 @@ This will give you a public IP address to login to the server.
 
     -> Check banned IPs (after some time)
         sudo fail2ban-client status sshd
+
+================================================================================
+PART 2: DOCKER AND APP DEPLOYMENT
+================================================================================
+
+This project already has a production Dockerfile.
+The container runs FastAPI on PORT=8080 and expects configuration from
+environment variables.
+
+--------------------------------------------------------------------------------
+
+## Install Docker
+
+    -> Install prerequisites
+        sudo apt install ca-certificates curl gnupg -y
+
+    -> Add Docker's official GPG key
+        sudo install -m 0755 -d /etc/apt/keyrings
+        curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg
+        sudo chmod a+r /etc/apt/keyrings/docker.gpg
+
+    -> Add Docker repository
+        echo \
+          "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu \
+          $(. /etc/os-release && echo "$VERSION_CODENAME") stable" | \
+          sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+
+    -> Install Docker
+        sudo apt update
+        sudo apt install docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin -y
+
+    -> Allow your deploy user to run Docker
+        sudo usermod -aG docker deploy
+
+    -> Log out and log back in, then verify
+        docker --version
+
+--------------------------------------------------------------------------------
+
+## Clone The App
+
+    -> Install git
+        sudo apt install git -y
+
+    -> Clone your repository
+        cd ~
+        git clone https://github.com/YOUR_GITHUB_USERNAME/fastapi-blog-postgres.git
+        cd fastapi-blog-postgres
+
+    -> Check the important deployment files exist
+        ls Dockerfile .dockerignore pyproject.toml uv.lock
+
+--------------------------------------------------------------------------------
+
+## Create Production Environment File
+
+Do not commit this file. It belongs only on the server.
+
+    -> Create .env
+        nano .env
+
+    -> Add the required values:
+
+        DATABASE_URL=postgresql+psycopg://USER:PASSWORD@HOST/blog?sslmode=require&channel_binding=require
+        SECRET_KEY=change-this-to-a-long-random-secret
+        S3_BUCKET_NAME=your-bucket-name
+        S3_REGION=us-east-1
+        S3_ACCESS_KEY_ID=your-access-key
+        S3_SECRET_ACCESS_KEY=your-secret-key
+        MAIL_SERVER=sandbox.smtp.mailtrap.io
+        MAIL_PORT=2525
+        MAIL_USERNAME=your-mail-username
+        MAIL_PASSWORD=your-mail-password
+        MAIL_FROM=noreply@fastapiblog.com
+        MAIL_USE_TLS=true
+        FRONTEND_URL=https://YOUR_DOMAIN
+
+For normal web traffic, use Neon's pooled connection string in DATABASE_URL.
+For one-time migrations or seeding, use the direct Neon connection string
+temporarily, then switch back to pooled.
+
+--------------------------------------------------------------------------------
+
+## Build And Run The Docker Container
+
+    -> Build the image
+        docker build -t fastapi-blog .
+
+    -> Run the app
+        docker run -d \
+          --name fastapi-blog \
+          --env-file .env \
+          --restart unless-stopped \
+          -p 127.0.0.1:8080:8080 \
+          fastapi-blog
+
+    -> Check logs
+        docker logs -f fastapi-blog
+
+    -> Test locally on the server
+        curl http://127.0.0.1:8080/health
+
+Expected response:
+
+        {"status":"healthy"}
+
+--------------------------------------------------------------------------------
+
+## Updating The App
+
+    -> Pull latest code
+        cd ~/fastapi-blog-postgres
+        git pull
+
+    -> Rebuild the image
+        docker build -t fastapi-blog .
+
+    -> Replace the running container
+        docker stop fastapi-blog
+        docker rm fastapi-blog
+        docker run -d \
+          --name fastapi-blog \
+          --env-file .env \
+          --restart unless-stopped \
+          -p 127.0.0.1:8080:8080 \
+          fastapi-blog
+
+    -> Verify
+        curl http://127.0.0.1:8080/health
+
+--------------------------------------------------------------------------------
+
+## Running Migrations
+
+This project uses Alembic and reads DATABASE_URL from the environment.
+
+    -> Run migrations inside a one-off container
+        docker run --rm --env-file .env fastapi-blog alembic upgrade head
+
+If you are using Neon, use the direct connection string for this one-off
+migration command when possible. Then switch .env back to the pooled URL for
+the running app.
+
+--------------------------------------------------------------------------------
+
+## Optional: Seed Demo Data
+
+The seed script is destructive. It deletes existing users/posts and old S3
+profile images before creating demo users and posts.
+
+Only run this against a database you are okay resetting.
+
+    -> Run the seed script inside a one-off container
+        docker run --rm --env-file .env fastapi-blog python populate_db.py
+
+For Neon, prefer the direct connection string while seeding. Switch back to the
+pooled connection string after seeding is complete.
+
+================================================================================
+PART 3: NGINX AND HTTPS
+================================================================================
+
+Nginx will receive public traffic on ports 80/443 and proxy it to the Docker
+container on 127.0.0.1:8080.
+
+--------------------------------------------------------------------------------
+
+## Install Nginx
+
+    -> Install Nginx
+        sudo apt install nginx -y
+
+    -> Start and enable it
+        sudo systemctl start nginx
+        sudo systemctl enable nginx
+
+--------------------------------------------------------------------------------
+
+## Configure Nginx Reverse Proxy
+
+    -> Create a site config
+        sudo nano /etc/nginx/sites-available/fastapi-blog
+
+    -> Add this config:
+
+        server {
+            listen 80;
+            server_name YOUR_DOMAIN www.YOUR_DOMAIN;
+
+            client_max_body_size 6M;
+
+            location / {
+                proxy_pass http://127.0.0.1:8080;
+                proxy_http_version 1.1;
+                proxy_set_header Host $host;
+                proxy_set_header X-Real-IP $remote_addr;
+                proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+                proxy_set_header X-Forwarded-Proto $scheme;
+            }
+        }
+
+    -> Enable the site
+        sudo ln -s /etc/nginx/sites-available/fastapi-blog /etc/nginx/sites-enabled/
+
+    -> Remove the default site if needed
+        sudo rm /etc/nginx/sites-enabled/default
+
+    -> Test and reload Nginx
+        sudo nginx -t
+        sudo systemctl reload nginx
+
+--------------------------------------------------------------------------------
+
+## Set Up HTTPS With Certbot
+
+    -> Point your DNS A record to the VPS public IP before this step.
+
+    -> Install Certbot
+        sudo apt install certbot python3-certbot-nginx -y
+
+    -> Request a certificate
+        sudo certbot --nginx -d YOUR_DOMAIN -d www.YOUR_DOMAIN
+
+    -> Test renewal
+        sudo certbot renew --dry-run
+
+--------------------------------------------------------------------------------
+
+## Final Checks
+
+    -> Check app health through Nginx
+        curl https://YOUR_DOMAIN/health
+
+    -> Check Docker container status
+        docker ps
+
+    -> Check app logs
+        docker logs --tail 100 fastapi-blog
+
+    -> Check Nginx logs if requests fail
+        sudo tail -f /var/log/nginx/error.log
+
+================================================================================
+NOTES
+================================================================================
+
+- Keep .env only on the server and never commit it.
+- Render does not use this VPS file. This guide is for a standalone Ubuntu VPS.
+- The app uses S3 for profile images, so the bucket and credentials must work.
+- The app uses Neon/Postgres through DATABASE_URL.
+- The Docker container listens on port 8080 internally.
+- Nginx is the public-facing web server.
