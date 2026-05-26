@@ -79,3 +79,9 @@ htmlcov/
 # uv / packaging
 # ----------------------
 uv.lock  # optional: commit if you want reproducible builds
+
+
+.venv
+__pycache__
+.env
+media/profile_pics
