@@ -1,4 +1,3 @@
-cat > ~/fastapi-blog-postgres/.dockerignore << 'EOF'
 # Python
 .venv/
 venv/
@@ -16,9 +15,9 @@ build/
 # Environment variables
 .env
 .env.*
-!.env.docker
+!.env.example
 
-# Database
+# Local databases
 *.db
 *.sqlite3
 
@@ -27,15 +26,12 @@ build/
 .gitignore
 .gitattributes
 
-# Testing
+# Tests and coverage
 tests/
 .pytest_cache/
 .coverage
 htmlcov/
 coverage.xml
-
-# Migrations versions
-migrations/versions/
 
 # Development tools
 .vscode/
@@ -50,31 +46,12 @@ Thumbs.db
 .LSOverride
 *~
 
-# Logs
+# Logs and temporary files
 *.log
 logs/
-
-# Docker files themselves
-Dockerfile
-docker-compose.yml
-docker-compose.*.yml
-.dockerignore
-
-# Documentation
-*.md
-README*
-docs/
-
-# Populate script and images
-populate_db.py
-populate_images/
-
-# Node
-node_modules/
-npm-debug.log
-
-# Temporary files
 tmp/
 temp/
 *.tmp
-EOF
+
+# Local seed-only assets
+populate_images/
