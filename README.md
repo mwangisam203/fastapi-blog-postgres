@@ -19,9 +19,10 @@ This project started as a simple blog page and has grown into a real web app wit
 - Supports forgot-password and reset-password pages.
 - Stores reset tokens hashed in the database.
 - Tracks a `likes` counter on post records.
-- Seeds the database with users, posts, and local profile images.
-- Serves static assets from `static/` and uploaded profile images from `media/`.
+- Seeds the database with users, posts, and profile images uploaded to S3.
+- Serves static assets from `static/` and profile image URLs from S3.
 - Returns JSON errors for `/api/...` routes and HTML error pages for browser routes.
+- Provides a `/health` endpoint that checks database connectivity.
 
 ## Tech Stack
 
@@ -36,9 +37,11 @@ This project started as a simple blog page and has grown into a real web app wit
 | Auth | JWT, OAuth2 password form, pwdlib Argon2 password hashing |
 | Templates | Jinja2 |
 | Frontend | HTML, CSS, Bootstrap 5, vanilla JavaScript modules |
-| Images | Pillow for profile image processing |
+| Images | Pillow for profile image processing, S3-compatible storage through boto3 |
 | Email | aiosmtplib for password reset email |
 | Seeding | httpx ASGITransport against the local FastAPI app |
+| Testing | pytest, httpx AsyncClient, Moto for mocked S3 |
+| Container | Docker multi-stage build with `uv` |
 
 ## Project Structure
 
@@ -50,7 +53,8 @@ fastapi-blog-postgres/
 ├── schemas.py                      # Pydantic request/response models
 ├── auth.py                         # Password hashing, JWT, reset-token hashing, current-user dependency
 ├── email_utils.py                  # Password reset email rendering/sending
-├── image_utils.py                  # Profile image processing and deletion
+├── image_utils.py                  # Profile image processing and S3 upload/delete
+├── s3_checks.py                    # Small S3 upload/delete smoke test
 ├── populate_db.py                  # Clears and seeds users/posts/profile images
 ├── config.py                       # Environment-driven settings
 ├── routers/
@@ -75,13 +79,15 @@ fastapi-blog-postgres/
 │   ├── js/utils.js                 # Shared modal/error/date/html helpers
 │   ├── icons/
 │   └── profile_pics/profile.jpeg   # Default profile image
-├── media/profile_pics/             # Uploaded/generated profile pictures
 ├── populate_images/                # Local seed images used by populate_db.py
+├── tests/                          # Async API tests with mocked S3
 ├── alembic/                        # Alembic migration environment and revisions
 │   └── versions/
 │       ├── f7215e176098_initial_migration.py
 │       └── 8e6c5e513b71_added_likes_func.py
 ├── alembic.ini
+├── Dockerfile
+├── .dockerignore
 ├── pyproject.toml
 └── uv.lock
 ```
@@ -135,6 +141,7 @@ fastapi-blog-postgres/
 
 - Python 3.12+
 - PostgreSQL for the current async Postgres setup, or SQLite if you point `DATABASE_URL` at an async SQLite URL
+- An S3 bucket, or S3-compatible storage, for profile picture uploads
 - A terminal
 - Optional: an SMTP service if you want real password reset emails
 
@@ -169,13 +176,17 @@ touch .env
 Add at least this:
 
 ```env
-DATABASE_URL=postgresql+asyncpg://postgres:postgres@localhost:5432/fastapi_blog
+DATABASE_URL=postgresql+psycopg://postgres:postgres@localhost:5432/fastapi_blog
 SECRET_KEY=change-this-to-a-long-random-secret
 ALGORITHM=HS256
 ACCESS_TOKEN_EXPIRE_MINUTES=30
 POSTS_PER_PAGE=10
 RESET_TOKEN_EXPIRE_MINUTES=60
 FRONTEND_URL=http://localhost:8000
+S3_BUCKET_NAME=your-bucket-name
+S3_REGION=us-east-1
+S3_ACCESS_KEY_ID=your-access-key
+S3_SECRET_ACCESS_KEY=your-secret-key
 ```
 
 For quick local SQLite development, use:
@@ -220,7 +231,7 @@ source .venv/bin/activate
 Install the dependencies:
 
 ```bash
-pip install "fastapi[standard]" sqlalchemy alembic asyncpg "psycopg[binary]" aiosqlite greenlet pydantic-settings pyjwt "pwdlib[argon2]" pillow httpx aiosmtplib
+pip install "fastapi[standard]" sqlalchemy alembic asyncpg "psycopg[binary]" aiosqlite greenlet pydantic-settings pyjwt "pwdlib[argon2]" pillow httpx aiosmtplib boto3
 ```
 
 Create `.env`:
@@ -232,13 +243,17 @@ touch .env
 Add:
 
 ```env
-DATABASE_URL=postgresql+asyncpg://postgres:postgres@localhost:5432/fastapi_blog
+DATABASE_URL=postgresql+psycopg://postgres:postgres@localhost:5432/fastapi_blog
 SECRET_KEY=change-this-to-a-long-random-secret
 ALGORITHM=HS256
 ACCESS_TOKEN_EXPIRE_MINUTES=30
 POSTS_PER_PAGE=10
 RESET_TOKEN_EXPIRE_MINUTES=60
 FRONTEND_URL=http://localhost:8000
+S3_BUCKET_NAME=your-bucket-name
+S3_REGION=us-east-1
+S3_ACCESS_KEY_ID=your-access-key
+S3_SECRET_ACCESS_KEY=your-secret-key
 ```
 
 Run migrations:
@@ -258,7 +273,7 @@ uvicorn main:app --reload
 The app reads its async database URL from `.env` through `config.py`:
 
 ```text
-DATABASE_URL=postgresql+asyncpg://postgres:postgres@localhost:5432/fastapi_blog
+DATABASE_URL=postgresql+psycopg://postgres:postgres@localhost:5432/fastapi_blog
 ```
 
 The database engine is created in `database.py`:
@@ -279,7 +294,7 @@ The `posts` table includes a `likes` column with a default value of `0`.
 
 Alembic is configured in `alembic/`. The migration environment reads `DATABASE_URL` from `.env`, so migration commands target the same database as the app.
 
-Current revisions:.... 
+Current revisions:
 
 - `f7215e176098_initial_migration.py` creates `users`, `posts`, and `password_reset_tokens`.
 - `8e6c5e513b71_added_likes_func.py` adds `posts.likes`.
@@ -318,13 +333,13 @@ With `uv`:
 uv run python populate_db.py
 ```
 
-Important: this script deletes existing data first. It also deletes generated files inside `media/profile_pics/`, except `.gitkeep` if present.
+Important: this script deletes existing users and posts first. It also deletes old profile picture objects from S3 for users that had uploaded images.
 
 The script:
 
 - creates users from the `USERS` list
 - logs each user in to get a JWT
-- uploads local images from `populate_images/` when a user has an `image` value
+- uploads local images from `populate_images/` to S3 when a user has an `image` value
 - creates posts using authenticated API requests
 - updates post dates so pagination looks realistic
 
@@ -345,10 +360,10 @@ Seed images live in:
 populate_images/
 ```
 
-Uploaded/processed profile pictures are saved to:
+Uploaded/processed profile pictures are stored in S3 under:
 
 ```text
-media/profile_pics/
+profile_pics/<filename>
 ```
 
 The app processes uploaded files with Pillow:
@@ -362,13 +377,30 @@ The app processes uploaded files with Pillow:
 The public URL is computed by the model:
 
 ```text
-/media/profile_pics/<filename>
+https://<S3_BUCKET_NAME>.s3.<S3_REGION>.amazonaws.com/profile_pics/<filename>
 ```
 
 If a user has no image, the app uses:
 
 ```text
 /static/profile_pics/profile.jpeg
+```
+
+Required `.env` values:
+
+```env
+S3_BUCKET_NAME=your-bucket-name
+S3_REGION=us-east-1
+S3_ACCESS_KEY_ID=your-access-key
+S3_SECRET_ACCESS_KEY=your-secret-key
+```
+
+For S3-compatible storage, set `S3_ENDPOINT_URL` as well.
+
+You can smoke-test S3 upload/delete access with:
+
+```bash
+uv run python s3_checks.py
 ```
 
 ## Authentication Flow
@@ -508,6 +540,26 @@ Seed database:
 python populate_db.py
 ```
 
+Run tests:
+
+```bash
+uv run pytest
+```
+
+The test suite uses a PostgreSQL database URL from `tests/conftest.py` and Moto for mocked S3. Make sure the test database exists and is reachable before running the full suite.
+
+Build the Docker image:
+
+```bash
+docker build -t fastapi-blog .
+```
+
+Run the Docker image:
+
+```bash
+docker run --env-file .env -p 8080:8080 fastapi-blog
+```
+
 Check Python syntax:
 
 ```bash
@@ -555,16 +607,19 @@ Request a new reset link.
 
 ### Profile pictures do not show
 
-Check that `main.py` mounts media:
+Profile pictures are uploaded to S3 and rendered from the public S3 URL computed by `models.User.image_path`.
 
-```python
-app.mount("/media", StaticFiles(directory="media"), name="media")
-```
+Check:
 
-Then verify the file exists under:
+- `S3_BUCKET_NAME`, `S3_REGION`, `S3_ACCESS_KEY_ID`, and `S3_SECRET_ACCESS_KEY` are set.
+- The bucket exists in the configured region.
+- The uploaded object exists under `profile_pics/`.
+- Your bucket/object policy allows the browser to read profile images.
 
-```text
-media/profile_pics/
+You can also run:
+
+```bash
+uv run python s3_checks.py
 ```
 
 ### Browser still shows old JavaScript or old icon
@@ -611,13 +666,13 @@ Only do this if you are okay losing local data.
 
 - Post `likes` are stored in the database model, but there is not yet a like/unlike API or frontend button.
 - Password reset requires SMTP configuration for real email delivery.
-- Tests are not set up yet.
-- Deployment/Docker setup is not included yet.
+- Profile image display currently assumes the bucket can serve public object URLs.
+- The Docker image expects runtime configuration through environment variables.
 
 ## Roadmap Ideas
 
-- Add automated tests for auth, posts, and password reset.
-- Add Docker and deployment configuration.
+- Expand automated test coverage for reset-token edge cases, account updates, and delete flows.
+- Add deployment examples for Cloud Run, Render, or a VPS.
 - Add richer post editing UI.
 - Add comments and a complete like/unlike workflow.
 - Add production email provider configuration.
