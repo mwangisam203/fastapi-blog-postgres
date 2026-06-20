@@ -7,6 +7,7 @@ This project started as a simple blog page and has grown into a real web app wit
 ## What The App Does
 
 - Shows a home feed of blog posts ordered by newest first.
+- Provides dedicated announcement and monthly post-calendar views.
 - Loads more posts with JavaScript pagination instead of a full page refresh.
 - Lets users register, log in, and keep a JWT access token in localStorage.
 - Lets authenticated users create posts from the navbar modal.
@@ -98,6 +99,8 @@ fastapi-blog-postgres/
 | Page | Route | Purpose |
 | --- | --- | --- |
 | Home | `/` or `/posts` | Server-rendered post feed |
+| Announcements | `/announcements` | Posts marked as announcements |
+| Post calendar | `/calendar?month=YYYY-MM` | Posts published during a selected month |
 | Single post | `/posts/{post_id}` | Read one post, edit/delete if owner |
 | User posts | `/users/{user_id}/posts` | Posts from one author |
 | Register | `/register` | Create an account |
