@@ -1,5 +1,6 @@
 {% extends "layout.html" %}
 {% block content %}
+  {% if feed_heading %}<h1 class="mb-4">{{ feed_heading }}</h1>{% endif %}
   <div id="postsContainer">
   {% for post in posts %}
     <article class="content-section py-3 px-4 mb-4">
@@ -17,12 +18,18 @@
           </div>
           <h2>
             <a class="article-title" href="{{ url_for("post_page", post_id=post.id) }}">{{ post.title }}</a>
+            {% if post.is_announcement %}<span class="badge text-bg-info fs-6">Announcement</span>{% endif %}
           </h2>
           <p class="article-content">{{ post.content }}</p>
         </div>
       </div>
     </article>
   {% endfor %}
+  {% if not posts %}
+    <div class="content-section py-4 px-4 mb-4 text-center text-body-secondary">
+      {{ empty_message | default("No posts have been published yet.") }}
+    </div>
+  {% endif %}
   </div>
 
     {% if has_more %}
@@ -41,6 +48,7 @@
   let currentOffset = {{ limit }};  // Start after server-rendered posts
   const limit = {{ limit }};
   let hasMore = {{ 'true' if has_more else 'false' }};
+  const postsApiUrl = {{ posts_api_url | tojson }};
 
   const postsContainer = document.getElementById('postsContainer');
   const loadMoreBtn = document.getElementById('loadMoreBtn');
@@ -58,6 +66,7 @@
             </div>
             <h2>
               <a class="article-title" href="/posts/${post.id}">${escapeHtml(post.title)}</a>
+              ${post.is_announcement ? '<span class="badge text-bg-info fs-6">Announcement</span>' : ''}
             </h2>
             <p class="article-content">${escapeHtml(post.content)}</p>
           </div>
@@ -75,7 +84,10 @@
     let errorOccurred = false;
 
     try {
-      const response = await fetch(`/api/posts?skip=${currentOffset}&limit=${limit}`);
+      const url = new URL(postsApiUrl, window.location.origin);
+      url.searchParams.set('skip', currentOffset);
+      url.searchParams.set('limit', limit);
+      const response = await fetch(url);
 
       if (!response.ok) {
         throw new Error('Failed to fetch posts');
