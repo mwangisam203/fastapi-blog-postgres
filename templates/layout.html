@@ -130,14 +130,17 @@
                 </div>
                 <aside class="col-md-4">
                     <div class="content-section py-3 px-4 mb-4">
-                        <h3>Our Sidebar</h3>
-                        <p class="text-body-secondary">You can put any information here you'd like.</p>
-                        <ul class="list-group">
-                            <li class="list-group-item">Latest Posts</li>
-                            <li class="list-group-item">Announcements</li>
-                            <li class="list-group-item">Calendars</li>
-                            <li class="list-group-item">etc</li>
-                        </ul>
+                        <h3>Explore</h3>
+                        <p class="text-body-secondary">Find posts and project resources.</p>
+                        <nav class="list-group" aria-label="Blog resources">
+                            <a class="list-group-item list-group-item-action"
+                               href="{{ url_for('home') }}">Latest Posts</a>
+                            <a class="list-group-item list-group-item-action"
+                               href="{{ url_for('announcements') }}">Announcements</a>
+                            <a class="list-group-item list-group-item-action"
+                               href="{{ url_for('post_calendar') }}">Post Calendar</a>
+                            <a class="list-group-item list-group-item-action" href="/docs">API Documentation</a>
+                        </nav>
                     </div>
                 </aside>
             </div>
@@ -173,6 +176,13 @@
                             <div class="mb-3">
                                 <label for="content" class="form-label">Content</label>
                                 <textarea class="form-control" id="content" name="content" rows="5" required></textarea>
+                            </div>
+                            <div class="form-check">
+                                <input class="form-check-input"
+                                       type="checkbox"
+                                       id="isAnnouncement"
+                                       name="is_announcement">
+                                <label class="form-check-label" for="isAnnouncement">Mark as announcement</label>
                             </div>
                         </div>
                         <div class="modal-footer">
@@ -312,8 +322,7 @@
             // Gather form values into a plain object {title: "...", content: "..."}
             const formData = new FormData(createForm);
             const postData = Object.fromEntries(formData.entries());
-
-            
+            postData.is_announcement = document.getElementById("isAnnouncement").checked;
 
             try {
                 // POST to our API as JSON
