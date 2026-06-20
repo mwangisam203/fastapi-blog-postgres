@@ -26,13 +26,18 @@ async def get_posts(
     db: Annotated[AsyncSession, Depends(get_db)],
     skip: Annotated[int, Query(ge=0)] = 0,
     limit: Annotated[int, Query(ge=1, le=100)] = 10,
+    announcements_only: bool = False,
 ):
-    count_result = await db.execute(select(func.count()).select_from(models.Post))
+    filters = [models.Post.is_announcement.is_(True)] if announcements_only else []
+    count_result = await db.execute(
+        select(func.count()).select_from(models.Post).where(*filters)
+    )
     total = count_result.scalar() or 0
 
     result = await db.execute(
         select(models.Post)
         .options(selectinload(models.Post.author))
+        .where(*filters)
         .order_by(models.Post.date_posted.desc())
         .offset(skip)
         .limit(limit),
@@ -65,6 +70,7 @@ async def create_post(
         title=post.title,
         content=post.content,
         user_id=current_user.id,
+        is_announcement=post.is_announcement,
     )
     db.add(new_post)
     await db.commit()
@@ -110,6 +116,7 @@ async def update_post_full(
 
     post.title = post_data.title
     post.content = post_data.content
+    post.is_announcement = post_data.is_announcement
 
     await db.commit()
     await db.refresh(post, attribute_names=["author"])
