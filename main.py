@@ -10,6 +10,7 @@ from sqlalchemy.orm import selectinload
 import models
 from database import engine, get_db
 from contextlib import asynccontextmanager
+from datetime import UTC, datetime
 from fastapi.exception_handlers import (
     http_exception_handler,
     request_validation_exception_handler,
@@ -91,6 +92,80 @@ async def home(request: Request, db: Annotated[AsyncSession, Depends(get_db)]):
             "title": "Home",
             "limit": settings.posts_per_page,
             "has_more": has_more,
+            "feed_heading": "Latest Posts",
+            "posts_api_url": "/api/posts",
+        },
+    )
+
+
+@app.get("/announcements", include_in_schema=False, name="announcements")
+async def announcements(
+    request: Request, db: Annotated[AsyncSession, Depends(get_db)]
+):
+    announcement_filter = models.Post.is_announcement.is_(True)
+    count_result = await db.execute(
+        select(func.count()).select_from(models.Post).where(announcement_filter)
+    )
+    total = count_result.scalar() or 0
+    result = await db.execute(
+        select(models.Post)
+        .options(selectinload(models.Post.author))
+        .where(announcement_filter)
+        .order_by(models.Post.date_posted.desc())
+        .limit(settings.posts_per_page)
+    )
+    posts = result.scalars().all()
+
+    return templates.TemplateResponse(
+        request,
+        "home.html",
+        {
+            "posts": posts,
+            "title": "Announcements",
+            "limit": settings.posts_per_page,
+            "has_more": len(posts) < total,
+            "feed_heading": "Announcements",
+            "empty_message": "No announcements have been posted yet.",
+            "posts_api_url": "/api/posts?announcements_only=true",
+        },
+    )
+
+
+@app.get("/calendar", include_in_schema=False, name="post_calendar")
+async def post_calendar(
+    request: Request,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    month: str | None = None,
+):
+    try:
+        selected = datetime.strptime(month, "%Y-%m") if month else datetime.now(UTC)
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail="Month must use YYYY-MM format",
+        ) from exc
+
+    start = datetime(selected.year, selected.month, 1, tzinfo=UTC)
+    if selected.month == 12:
+        end = datetime(selected.year + 1, 1, 1, tzinfo=UTC)
+    else:
+        end = datetime(selected.year, selected.month + 1, 1, tzinfo=UTC)
+
+    result = await db.execute(
+        select(models.Post)
+        .options(selectinload(models.Post.author))
+        .where(models.Post.date_posted >= start, models.Post.date_posted < end)
+        .order_by(models.Post.date_posted.desc())
+    )
+    posts = result.scalars().all()
+    return templates.TemplateResponse(
+        request,
+        "calendar.html",
+        {
+            "posts": posts,
+            "title": "Post Calendar",
+            "selected_month": start.strftime("%Y-%m"),
+            "month_heading": start.strftime("%B %Y"),
         },
     )
 
