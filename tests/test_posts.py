@@ -133,3 +133,34 @@ async def test_get_posts_with_pagination(client: AsyncClient):
     assert len(data["posts"]) == 2
     assert data["skip"] == 2
     assert data["limit"] == 2
+
+
+@pytest.mark.anyio
+async def test_filter_announcement_posts(client: AsyncClient):
+    await create_test_user(client)
+    headers = auth_header(await login_user(client))
+
+    regular = await client.post(
+        "/api/posts",
+        json={"title": "Regular Post", "content": "Regular post content"},
+        headers=headers,
+    )
+    assert regular.status_code == 201
+
+    announcement = await client.post(
+        "/api/posts",
+        json={
+            "title": "Important News",
+            "content": "An important announcement",
+            "is_announcement": True,
+        },
+        headers=headers,
+    )
+    assert announcement.status_code == 201
+    assert announcement.json()["is_announcement"] is True
+
+    response = await client.get("/api/posts?announcements_only=true")
+    assert response.status_code == 200
+    data = response.json()
+    assert data["total"] == 1
+    assert data["posts"][0]["title"] == "Important News"
