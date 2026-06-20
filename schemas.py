@@ -65,6 +65,32 @@ class PaginatedPostsResponse(BaseModel):
     has_more: bool
 
 
+class CommentCreate(BaseModel):
+    content: str = Field(min_length=1, max_length=2000)
+
+
+class CommentUpdate(BaseModel):
+    content: str = Field(min_length=1, max_length=2000)
+
+
+class CommentResponse(CommentCreate):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    user_id: int
+    post_id: int
+    date_posted: datetime
+    author: UserPublic
+
+
+class PaginatedCommentsResponse(BaseModel):
+    comments: list[CommentResponse]
+    total: int
+    skip: int
+    limit: int
+    has_more: bool
+
+
 class ForgotPasswordRequest(BaseModel):
     email: EmailStr = Field(max_length=120)
 

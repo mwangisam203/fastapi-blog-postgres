@@ -29,6 +29,34 @@
             </div>
         </div>
     </article>
+    <section class="content-section py-3 px-4 mb-4" aria-labelledby="commentsHeading">
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <h3 id="commentsHeading" class="mb-0">Comments</h3>
+            <span id="commentCount" class="text-body-secondary"></span>
+        </div>
+        <form id="commentForm" class="mb-4 d-none">
+            <label for="commentContent" class="form-label">Join the conversation</label>
+            <textarea id="commentContent"
+                      class="form-control"
+                      rows="3"
+                      minlength="1"
+                      maxlength="2000"
+                      required></textarea>
+            <div class="d-flex justify-content-end mt-2">
+                <button type="submit" class="btn btn-primary">Post Comment</button>
+            </div>
+        </form>
+        <p id="commentLoginPrompt" class="mb-4 d-none">
+            <a href="/login">Log in</a> to leave a comment.
+        </p>
+        <div id="commentsList"></div>
+        <p id="noComments" class="text-body-secondary d-none">No comments yet. Start the conversation.</p>
+        <div class="text-center mt-3">
+            <button id="loadMoreComments"
+                    type="button"
+                    class="btn btn-outline-primary d-none">Load More Comments</button>
+        </div>
+    </section>
     <!-- Edit Post Modal -->
     <div class="modal fade"
          id="editModal"
@@ -106,18 +134,133 @@
 {% block scripts %}
     <script type="module">
     import { getCurrentUser, getToken } from '/static/js/auth.js';
-    import { getErrorMessage, showModal, hideModal } from '/static/js/utils.js';
+    import {
+        escapeHtml,
+        formatDate,
+        getErrorMessage,
+        showModal,
+        hideModal,
+    } from '/static/js/utils.js';
 
     const postId = {{ post.id }};
     const postUserId = {{ post.user_id }};
+    const commentLimit = 20;
+    let commentSkip = 0;
+    let currentUser = null;
 
     // Show edit/delete buttons only if current user owns this post
     async function checkOwnership() {
-        const user = await getCurrentUser();
-        if (user && user.id === postUserId) {
+        currentUser = await getCurrentUser();
+        if (currentUser && currentUser.id === postUserId) {
             document.getElementById('postActions').classList.remove('d-none');
         }
+        document.getElementById('commentForm').classList.toggle('d-none', !currentUser);
+        document.getElementById('commentLoginPrompt').classList.toggle('d-none', !!currentUser);
     }
+
+    function renderComment(comment) {
+        const isOwner = currentUser && currentUser.id === comment.user_id;
+        const actions = isOwner ? `
+            <div class="ms-auto flex-shrink-0">
+                <button type="button" class="btn btn-sm btn-outline-secondary edit-comment">Edit</button>
+                <button type="button" class="btn btn-sm btn-outline-danger delete-comment">Delete</button>
+            </div>` : '';
+        const element = document.createElement('article');
+        element.className = 'border-top py-3';
+        element.dataset.commentId = comment.id;
+        element.dataset.content = comment.content;
+        element.innerHTML = `
+            <div class="d-flex gap-3">
+                <img class="rounded-circle flex-shrink-0"
+                     src="${escapeHtml(comment.author.image_path)}"
+                     alt="${escapeHtml(comment.author.username)}'s profile picture"
+                     width="44" height="44" loading="lazy">
+                <div class="flex-grow-1 min-w-0">
+                    <div>
+                        <a href="/users/${comment.author.id}/posts" class="fw-semibold text-decoration-none">
+                            ${escapeHtml(comment.author.username)}
+                        </a>
+                        <small class="text-body-secondary ms-2">${formatDate(comment.date_posted)}</small>
+                    </div>
+                    <p class="comment-content mb-0 mt-1 text-break">${escapeHtml(comment.content)}</p>
+                </div>
+                ${actions}
+            </div>`;
+        return element;
+    }
+
+    async function loadComments(reset = false) {
+        if (reset) {
+            commentSkip = 0;
+            document.getElementById('commentsList').replaceChildren();
+        }
+        const response = await fetch(
+            `/api/posts/${postId}/comments?skip=${commentSkip}&limit=${commentLimit}`,
+        );
+        if (!response.ok) return;
+        const data = await response.json();
+        const list = document.getElementById('commentsList');
+        data.comments.forEach((comment) => list.appendChild(renderComment(comment)));
+        commentSkip += data.comments.length;
+        document.getElementById('commentCount').textContent =
+            `${data.total} ${data.total === 1 ? 'comment' : 'comments'}`;
+        document.getElementById('noComments').classList.toggle('d-none', data.total !== 0);
+        document.getElementById('loadMoreComments').classList.toggle('d-none', !data.has_more);
+    }
+
+    document.getElementById('commentForm').addEventListener('submit', async (event) => {
+        event.preventDefault();
+        const content = document.getElementById('commentContent').value.trim();
+        if (!content) return;
+        const response = await fetch(`/api/posts/${postId}/comments`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${getToken()}`,
+            },
+            body: JSON.stringify({ content }),
+        });
+        if (response.status === 401) { window.location.href = '/login'; return; }
+        if (response.ok) {
+            document.getElementById('commentContent').value = '';
+            await loadComments(true);
+        } else {
+            const error = await response.json();
+            document.getElementById('errorMessage').textContent = getErrorMessage(error);
+            showModal('errorModal');
+        }
+    });
+
+    document.getElementById('commentsList').addEventListener('click', async (event) => {
+        const article = event.target.closest('[data-comment-id]');
+        if (!article) return;
+        const commentId = article.dataset.commentId;
+
+        if (event.target.closest('.edit-comment')) {
+            const content = window.prompt('Edit your comment:', article.dataset.content);
+            if (content === null || !content.trim()) return;
+            const response = await fetch(`/api/posts/${postId}/comments/${commentId}`, {
+                method: 'PATCH',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${getToken()}`,
+                },
+                body: JSON.stringify({ content: content.trim() }),
+            });
+            if (response.ok) await loadComments(true);
+        }
+
+        if (event.target.closest('.delete-comment') &&
+            window.confirm('Delete this comment?')) {
+            const response = await fetch(`/api/posts/${postId}/comments/${commentId}`, {
+                method: 'DELETE',
+                headers: { 'Authorization': `Bearer ${getToken()}` },
+            });
+            if (response.status === 204) await loadComments(true);
+        }
+    });
+
+    document.getElementById('loadMoreComments').addEventListener('click', () => loadComments());
 
     // Edit Post Form Handler
     const editForm = document.getElementById('editPostForm');
@@ -208,6 +351,7 @@
         }
     });
 
-    checkOwnership();
+    await checkOwnership();
+    await loadComments();
     </script>
 {% endblock scripts %}

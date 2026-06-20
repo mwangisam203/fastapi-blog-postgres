@@ -27,6 +27,10 @@ class User(Base):
         back_populates="author", cascade="all, delete-orphan"
     )
 
+    comments: Mapped[list[Comment]] = relationship(
+        back_populates="author", cascade="all, delete-orphan"
+    )
+
     reset_tokens: Mapped[list[PasswordResetToken]] = relationship(
         back_populates="user",
         cascade="all, delete-orphan",
@@ -58,6 +62,29 @@ class Post(Base):
     likes: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
 
     author: Mapped[User] = relationship(back_populates="posts")
+
+    comments: Mapped[list[Comment]] = relationship(
+        back_populates="post", cascade="all, delete-orphan"
+    )
+
+
+class Comment(Base):
+    __tablename__ = "comments"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    content: Mapped[str] = mapped_column(Text, nullable=False)
+    user_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id"), nullable=False, index=True
+    )
+    post_id: Mapped[int] = mapped_column(
+        ForeignKey("posts.id"), nullable=False, index=True
+    )
+    date_posted: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=lambda: datetime.now(UTC)
+    )
+
+    author: Mapped[User] = relationship(back_populates="comments")
+    post: Mapped[Post] = relationship(back_populates="comments")
 
 
 class PasswordResetToken(Base):

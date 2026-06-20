@@ -11,6 +11,7 @@ This project started as a simple blog page and has grown into a real web app wit
 - Lets users register, log in, and keep a JWT access token in localStorage.
 - Lets authenticated users create posts from the navbar modal.
 - Lets post owners edit or delete their own posts.
+- Lets authenticated users comment on posts and edit or delete their own comments.
 - Shows individual post pages.
 - Shows user-specific post pages.
 - Lets users update their username and email.
@@ -119,6 +120,15 @@ fastapi-blog-postgres/
 | `PUT` | `/api/posts/{post_id}` | Owner | Replace title/content |
 | `PATCH` | `/api/posts/{post_id}` | Owner | Partially update title/content |
 | `DELETE` | `/api/posts/{post_id}` | Owner | Delete a post |
+
+### Comments
+
+| Method | Endpoint | Auth | Description |
+| --- | --- | --- | --- |
+| `GET` | `/api/posts/{post_id}/comments` | No | Paginated comments for a post |
+| `POST` | `/api/posts/{post_id}/comments` | Yes | Add a comment |
+| `PATCH` | `/api/posts/{post_id}/comments/{comment_id}` | Owner | Edit a comment |
+| `DELETE` | `/api/posts/{post_id}/comments/{comment_id}` | Owner | Delete a comment |
 
 ### Users And Auth
 
