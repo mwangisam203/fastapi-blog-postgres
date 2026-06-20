@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 
-from sqlalchemy import DateTime, ForeignKey, Integer, String, Text
+from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from database import Base
@@ -60,6 +60,9 @@ class Post(Base):
     )
 
     likes: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    is_announcement: Mapped[bool] = mapped_column(
+        Boolean, default=False, server_default="false"
+    )
 
     author: Mapped[User] = relationship(back_populates="posts")
 
