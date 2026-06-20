@@ -40,12 +40,13 @@ class PostBase(BaseModel):
 
 
 class PostCreate(PostBase):
-    pass
+    is_announcement: bool = False
 
 
 class PostUpdate(BaseModel):
     title: str | None = Field(default=None, min_length=2, max_length=90)
     content: str | None = Field(default=None, min_length=5)
+    is_announcement: bool | None = None
 
 
 class PostResponse(PostBase):
@@ -54,6 +55,7 @@ class PostResponse(PostBase):
     id: int
     user_id: int
     date_posted: datetime
+    is_announcement: bool
     author: UserPublic
 
 
