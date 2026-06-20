@@ -1,0 +1,39 @@
+{% extends "layout.html" %}
+{% block content %}
+  <section class="content-section py-4 px-4 mb-4">
+    <h1 class="mb-3">Post Calendar</h1>
+    <form method="get" action="{{ url_for('post_calendar') }}" class="row g-2 align-items-end">
+      <div class="col-sm-8">
+        <label for="month" class="form-label">Choose a month</label>
+        <input id="month"
+               name="month"
+               type="month"
+               class="form-control"
+               value="{{ selected_month }}"
+               required>
+      </div>
+      <div class="col-sm-4">
+        <button type="submit" class="btn btn-primary w-100">View Posts</button>
+      </div>
+    </form>
+  </section>
+
+  <h2 class="mb-3">{{ month_heading }}</h2>
+  {% for post in posts %}
+    <article class="content-section py-3 px-4 mb-4">
+      <div class="article-metadata mb-2">
+        <a class="me-2" href="{{ url_for('user_posts', user_id=post.author.id) }}">{{ post.author.username }}</a>
+        <small class="text-body-secondary">{{ post.date_posted.strftime('%B %d, %Y') }}</small>
+      </div>
+      <h3>
+        <a class="article-title" href="{{ url_for('post_page', post_id=post.id) }}">{{ post.title }}</a>
+        {% if post.is_announcement %}<span class="badge text-bg-info fs-6">Announcement</span>{% endif %}
+      </h3>
+      <p class="article-content mb-0">{{ post.content }}</p>
+    </article>
+  {% else %}
+    <div class="content-section py-4 px-4 mb-4 text-center text-body-secondary">
+      No posts were published in {{ month_heading }}.
+    </div>
+  {% endfor %}
+{% endblock content %}
