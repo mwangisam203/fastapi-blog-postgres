@@ -90,3 +90,12 @@ export function likeButtonHtml(post) {
     </button>`;
 }
 
+export function commentCountHtml(post) {
+  return `
+    <a class="btn btn-sm btn-outline-secondary"
+       href="/posts/${post.id}#comments"
+       aria-label="View comments">
+      <span aria-hidden="true">💬</span>
+      <span>${post.comments_count}</span>
+    </a>`;
+}
