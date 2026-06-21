@@ -13,6 +13,7 @@ This project started as a simple blog page and has grown into a real web app wit
 - Lets authenticated users create posts from the navbar modal.
 - Lets post owners edit or delete their own posts.
 - Lets authenticated users comment on posts and edit or delete their own comments.
+- Shows public like and comment totals on every post card.
 - Shows individual post pages.
 - Shows user-specific post pages.
 - Lets users update their username and email.
