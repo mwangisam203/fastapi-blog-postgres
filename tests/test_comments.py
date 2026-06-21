@@ -30,6 +30,9 @@ async def test_comment_lifecycle(client: AsyncClient):
     assert comment["content"] == "A thoughtful comment"
     assert comment["author"]["id"] == user["id"]
 
+    post_response = await client.get(f"/api/posts/{post_id}")
+    assert post_response.json()["comments_count"] == 1
+
     response = await client.get(f"/api/posts/{post_id}/comments")
     assert response.status_code == 200
     assert response.json()["total"] == 1
@@ -50,6 +53,8 @@ async def test_comment_lifecycle(client: AsyncClient):
 
     response = await client.get(f"/api/posts/{post_id}/comments")
     assert response.json()["total"] == 0
+    post_response = await client.get(f"/api/posts/{post_id}")
+    assert post_response.json()["comments_count"] == 0
 
 
 @pytest.mark.anyio
