@@ -19,9 +19,9 @@
             href="{{ url_for('user_posts', user_id=post.author.id) }}"
             >{{ post.author.username }}</a
           >
-          <small class="text-body-secondary"
-            >{{ post.date_posted.strftime("%B %d, %Y") }}</small
-          >
+          <small class="text-body-secondary">
+            <time class="local-datetime" datetime="{{ post.date_posted.isoformat() }}">{{ post.date_posted.strftime("%B %d, %Y at %I:%M %p") }}</time>
+          </small>
         </div>
         <h2>
           <a
@@ -61,7 +61,7 @@
 </div>
 {% endif %} {% endblock content %} {% block scripts %}
 <script type="module">
-  import { escapeHtml, formatDate } from '/static/js/utils.js';
+  import { escapeHtml, formatDateTime } from '/static/js/utils.js?v=3';
   import { commentCountHtml, initializeLikeButtons, likeButtonHtml } from '/static/js/likes.js';
 
   const userId = {{ user.id }};
@@ -80,7 +80,7 @@
           <div class="flex-grow-1">
             <div class="article-metadata mb-2">
               <a class="me-2" href="/users/${post.author.id}/posts">${escapeHtml(post.author.username)}</a>
-              <small class="text-body-secondary">${formatDate(post.date_posted)}</small>
+              <small class="text-body-secondary"><time datetime="${post.date_posted}">${formatDateTime(post.date_posted)}</time></small>
             </div>
             <h2>
               <a class="article-title" href="/posts/${post.id}">${escapeHtml(post.title)}</a>
