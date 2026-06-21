@@ -27,6 +27,12 @@
                     <span class="like-icon" aria-hidden="true">♡</span>
                     <span class="like-count">{{ post.likes }}</span>
                 </button>
+                <a class="btn btn-sm btn-outline-secondary"
+                   href="#comments"
+                   aria-label="View comments">
+                    <span aria-hidden="true">💬</span>
+                    <span id="postCommentCount">{{ post.comments_count }}</span>
+                </a>
                 <div id="postActions" class="post-actions mt-3 pt-3 border-top d-none">
                     <button type="button"
                             class="btn btn-outline-secondary me-1"
@@ -40,7 +46,9 @@
             </div>
         </div>
     </article>
-    <section class="content-section py-3 px-4 mb-4" aria-labelledby="commentsHeading">
+    <section id="comments"
+             class="content-section py-3 px-4 mb-4"
+             aria-labelledby="commentsHeading">
         <div class="d-flex justify-content-between align-items-center mb-3">
             <h3 id="commentsHeading" class="mb-0">Comments</h3>
             <span id="commentCount" class="text-body-secondary"></span>
@@ -252,6 +260,7 @@
         commentSkip += data.comments.length;
         document.getElementById('commentCount').textContent =
             `${data.total} ${data.total === 1 ? 'comment' : 'comments'}`;
+        document.getElementById('postCommentCount').textContent = data.total;
         document.getElementById('noComments').classList.toggle('d-none', data.total !== 0);
         document.getElementById('loadMoreComments').classList.toggle('d-none', !data.has_more);
     }
