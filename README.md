@@ -21,6 +21,7 @@ This project started as a simple blog page and has grown into a real web app wit
 - Supports forgot-password and reset-password pages.
 - Stores reset tokens hashed in the database.
 - Tracks a `likes` counter on post records.
+- Lets signed-in users like a post once and withdraw their like with the same button.
 - Seeds the database with users, posts, and profile images uploaded to S3.
 - Serves static assets from `static/` and profile image URLs from S3.
 - Returns JSON errors for `/api/...` routes and HTML error pages for browser routes.
@@ -123,6 +124,8 @@ fastapi-blog-postgres/
 | `PUT` | `/api/posts/{post_id}` | Owner | Replace title/content |
 | `PATCH` | `/api/posts/{post_id}` | Owner | Partially update title/content |
 | `DELETE` | `/api/posts/{post_id}` | Owner | Delete a post |
+| `POST` | `/api/posts/{post_id}/like` | Yes | Toggle the current user's like |
+| `GET` | `/api/posts/likes/me?post_ids=1` | Yes | Get liked IDs for displayed posts |
 
 ### Comments
 
@@ -677,7 +680,6 @@ Only do this if you are okay losing local data.
 
 ## Current Limitations
 
-- Post `likes` are stored in the database model, but there is not yet a like/unlike API or frontend button.
 - Password reset requires SMTP configuration for real email delivery.
 - Profile image display currently assumes the bucket can serve public object URLs.
 - The Docker image expects runtime configuration through environment variables.
@@ -687,7 +689,6 @@ Only do this if you are okay losing local data.
 - Expand automated test coverage for reset-token edge cases, account updates, and delete flows.
 - Add deployment examples for Cloud Run, Render, or a VPS.
 - Add richer post editing UI.
-- Add comments and a complete like/unlike workflow.
 - Add production email provider configuration.
 
 ## Author
