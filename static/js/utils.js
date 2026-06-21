@@ -30,12 +30,30 @@ export function escapeHtml(text) {
   return div.innerHTML;
 }
 
+function parseApiDate(dateString) {
+  const hasTimezone = /(?:Z|[+-]\d{2}:\d{2})$/i.test(dateString);
+  return new Date(hasTimezone ? dateString : `${dateString}Z`);
+}
+
 // Date formatting to match server's strftime("%B %d, %Y")
 export function formatDate(dateString) {
-  const date = new Date(dateString);
+  const date = parseApiDate(dateString);
   return date.toLocaleDateString("en-US", {
     year: "numeric",
     month: "long",
     day: "2-digit",
+  });
+}
+
+// Full timestamp in the viewer's local timezone.
+export function formatDateTime(dateString) {
+  const date = parseApiDate(dateString);
+  return date.toLocaleString("en-US", {
+    year: "numeric",
+    month: "long",
+    day: "2-digit",
+    hour: "numeric",
+    minute: "2-digit",
+    timeZoneName: "short",
   });
 }
