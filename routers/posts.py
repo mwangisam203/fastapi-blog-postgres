@@ -11,6 +11,8 @@ from schemas import (
     CommentCreate,
     CommentResponse,
     CommentUpdate,
+    LikedPostsResponse,
+    LikeResponse,
     PaginatedCommentsResponse,
     PaginatedPostsResponse,
     PostCreate,
@@ -76,6 +78,71 @@ async def create_post(
     await db.commit()
     await db.refresh(new_post, attribute_names=["author"])
     return new_post
+
+
+@router.get("/likes/me", response_model=LikedPostsResponse)
+async def get_my_liked_posts(
+    current_user: CurrentUser,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    post_ids: Annotated[list[int] | None, Query()] = None,
+):
+    post_ids = post_ids or []
+    if len(post_ids) > 100:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail="A maximum of 100 post IDs is allowed",
+        )
+    if not post_ids:
+        return LikedPostsResponse(post_ids=[])
+
+    result = await db.execute(
+        select(models.Like.post_id).where(
+            models.Like.user_id == current_user.id,
+            models.Like.post_id.in_(set(post_ids)),
+        )
+    )
+    return LikedPostsResponse(post_ids=sorted(result.scalars().all()))
+
+
+@router.post("/{post_id}/like", response_model=LikeResponse)
+async def toggle_post_like(
+    post_id: int,
+    current_user: CurrentUser,
+    db: Annotated[AsyncSession, Depends(get_db)],
+):
+    result = await db.execute(
+        select(models.Post)
+        .where(models.Post.id == post_id)
+        .with_for_update()
+    )
+    post = result.scalars().first()
+    if not post:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Post not found")
+
+    result = await db.execute(
+        select(models.Like).where(
+            models.Like.post_id == post_id,
+            models.Like.user_id == current_user.id,
+        )
+    )
+    existing_like = result.scalars().first()
+    if existing_like:
+        await db.delete(existing_like)
+        liked = False
+    else:
+        db.add(models.Like(post_id=post_id, user_id=current_user.id))
+        liked = True
+
+    await db.flush()
+    likes = await db.scalar(
+        select(func.count())
+        .select_from(models.Like)
+        .where(models.Like.post_id == post_id)
+    ) or 0
+    post.likes = likes
+    await db.commit()
+
+    return LikeResponse(post_id=post_id, likes=likes, liked=liked)
 
 
 ## get_post
