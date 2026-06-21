@@ -30,6 +30,14 @@
         {% if post.is_announcement %}<span class="badge text-bg-info fs-6">Announcement</span>{% endif %}
       </h3>
       <p class="article-content mb-0">{{ post.content }}</p>
+      <button type="button"
+              class="btn btn-sm btn-outline-secondary like-button mt-3"
+              data-like-post-id="{{ post.id }}"
+              aria-pressed="false"
+              aria-label="Like this post">
+        <span class="like-icon" aria-hidden="true">♡</span>
+        <span class="like-count">{{ post.likes }}</span>
+      </button>
     </article>
   {% else %}
     <div class="content-section py-4 px-4 mb-4 text-center text-body-secondary">
