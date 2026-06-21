@@ -12,7 +12,9 @@
                 <div class="article-metadata mb-2">
                     <a class="me-2"
                        href="{{ url_for("user_posts", user_id=post.author.id) }}">{{ post.author.username }}</a>
-                    <small class="text-body-secondary">{{ post.date_posted.strftime("%B %d, %Y") }}</small>
+                    <small class="text-body-secondary">
+                        <time class="local-datetime" datetime="{{ post.date_posted.isoformat() }}">{{ post.date_posted.strftime("%B %d, %Y at %I:%M %p") }}</time>
+                    </small>
                 </div>
                 <h2 class="article-title">
                     {{ post.title }}
@@ -171,11 +173,11 @@
     import { getCurrentUser, getToken } from '/static/js/auth.js';
     import {
         escapeHtml,
-        formatDate,
+        formatDateTime,
         getErrorMessage,
         showModal,
         hideModal,
-    } from '/static/js/utils.js';
+    } from '/static/js/utils.js?v=3';
 
     const postId = {{ post.id }};
     const postUserId = {{ post.user_id }};
@@ -236,7 +238,7 @@
                         <a href="/users/${comment.author.id}/posts" class="fw-semibold text-decoration-none">
                             ${escapeHtml(comment.author.username)}
                         </a>
-                        <small class="text-body-secondary ms-2">${formatDate(comment.date_posted)}</small>
+                        <small class="text-body-secondary ms-2"><time datetime="${comment.date_posted}">${formatDateTime(comment.date_posted)}</time></small>
                     </div>
                     <p class="comment-content mb-0 mt-1 text-break">${escapeHtml(comment.content)}</p>
                 </div>
