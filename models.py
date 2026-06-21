@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, Text
+from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from database import Base
@@ -29,6 +29,10 @@ class User(Base):
 
     comments: Mapped[list[Comment]] = relationship(
         back_populates="author", cascade="all, delete-orphan"
+    )
+
+    likes: Mapped[list[Like]] = relationship(
+        back_populates="user", cascade="all, delete-orphan"
     )
 
     reset_tokens: Mapped[list[PasswordResetToken]] = relationship(
@@ -69,6 +73,31 @@ class Post(Base):
     comments: Mapped[list[Comment]] = relationship(
         back_populates="post", cascade="all, delete-orphan"
     )
+
+    liked_by: Mapped[list[Like]] = relationship(
+        back_populates="post", cascade="all, delete-orphan"
+    )
+
+
+class Like(Base):
+    __tablename__ = "post_likes"
+    __table_args__ = (
+        UniqueConstraint("user_id", "post_id", name="uq_post_likes_user_post"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id"), nullable=False, index=True
+    )
+    post_id: Mapped[int] = mapped_column(
+        ForeignKey("posts.id"), nullable=False, index=True
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=lambda: datetime.now(UTC)
+    )
+
+    user: Mapped[User] = relationship(back_populates="likes")
+    post: Mapped[Post] = relationship(back_populates="liked_by")
 
 
 class Comment(Base):
