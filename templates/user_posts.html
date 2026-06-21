@@ -39,6 +39,12 @@
           <span class="like-icon" aria-hidden="true">♡</span>
           <span class="like-count">{{ post.likes }}</span>
         </button>
+        <a class="btn btn-sm btn-outline-secondary"
+           href="{{ url_for('post_page', post_id=post.id) }}#comments"
+           aria-label="View comments">
+          <span aria-hidden="true">💬</span>
+          <span>{{ post.comments_count }}</span>
+        </a>
       </div>
     </div>
   </article>
@@ -56,7 +62,7 @@
 {% endif %} {% endblock content %} {% block scripts %}
 <script type="module">
   import { escapeHtml, formatDate } from '/static/js/utils.js';
-  import { initializeLikeButtons, likeButtonHtml } from '/static/js/likes.js';
+  import { commentCountHtml, initializeLikeButtons, likeButtonHtml } from '/static/js/likes.js';
 
   const userId = {{ user.id }};
   let currentOffset = {{ limit }};
@@ -81,6 +87,7 @@
             </h2>
             <p class="article-content">${escapeHtml(post.content)}</p>
             ${likeButtonHtml(post)}
+            ${commentCountHtml(post)}
           </div>
         </div>
       </article>
