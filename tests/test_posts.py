@@ -32,6 +32,7 @@ async def test_create_post_success(client: AsyncClient):
     assert data["title"] == "My First Post"
     assert data["content"] == "This is the content"
     assert data["user_id"] == user["id"]
+    assert data["comments_count"] == 0
     assert "id" in data
     assert "date_posted" in data
     assert data["author"]["username"] == "testuser"
