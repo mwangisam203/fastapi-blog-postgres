@@ -45,6 +45,11 @@
             <h3 id="commentsHeading" class="mb-0">Comments</h3>
             <span id="commentCount" class="text-body-secondary"></span>
         </div>
+        <button id="showCommentForm"
+                type="button"
+                class="btn btn-outline-primary mb-4 d-none"
+                aria-controls="commentForm"
+                aria-expanded="false">Write a Comment</button>
         <form id="commentForm" class="mb-4 d-none">
             <label for="commentContent" class="form-label">Join the conversation</label>
             <textarea id="commentContent"
@@ -54,6 +59,9 @@
                       maxlength="2000"
                       required></textarea>
             <div class="d-flex justify-content-end mt-2">
+                <button id="cancelComment"
+                        type="button"
+                        class="btn btn-outline-secondary me-2">Cancel</button>
                 <button type="submit" class="btn btn-primary">Post Comment</button>
             </div>
         </form>
@@ -167,15 +175,36 @@
     let commentSkip = 0;
     let currentUser = null;
 
+    const commentForm = document.getElementById('commentForm');
+    const showCommentFormButton = document.getElementById('showCommentForm');
+    const commentContent = document.getElementById('commentContent');
+
+    function openCommentComposer() {
+        showCommentFormButton.classList.add('d-none');
+        showCommentFormButton.setAttribute('aria-expanded', 'true');
+        commentForm.classList.remove('d-none');
+        commentContent.focus();
+    }
+
+    function closeCommentComposer() {
+        commentForm.classList.add('d-none');
+        showCommentFormButton.classList.remove('d-none');
+        showCommentFormButton.setAttribute('aria-expanded', 'false');
+        commentContent.value = '';
+    }
+
     // Show edit/delete buttons only if current user owns this post
     async function checkOwnership() {
         currentUser = await getCurrentUser();
         if (currentUser && currentUser.id === postUserId) {
             document.getElementById('postActions').classList.remove('d-none');
         }
-        document.getElementById('commentForm').classList.toggle('d-none', !currentUser);
+        showCommentFormButton.classList.toggle('d-none', !currentUser);
         document.getElementById('commentLoginPrompt').classList.toggle('d-none', !!currentUser);
     }
+
+    showCommentFormButton.addEventListener('click', openCommentComposer);
+    document.getElementById('cancelComment').addEventListener('click', closeCommentComposer);
 
     function renderComment(comment) {
         const isOwner = currentUser && currentUser.id === comment.user_id;
@@ -227,9 +256,9 @@
         document.getElementById('loadMoreComments').classList.toggle('d-none', !data.has_more);
     }
 
-    document.getElementById('commentForm').addEventListener('submit', async (event) => {
+    commentForm.addEventListener('submit', async (event) => {
         event.preventDefault();
-        const content = document.getElementById('commentContent').value.trim();
+        const content = commentContent.value.trim();
         if (!content) return;
         const response = await fetch(`/api/posts/${postId}/comments`, {
             method: 'POST',
@@ -241,8 +270,8 @@
         });
         if (response.status === 401) { window.location.href = '/login'; return; }
         if (response.ok) {
-            document.getElementById('commentContent').value = '';
             await loadComments(true);
+            closeCommentComposer();
         } else {
             const error = await response.json();
             document.getElementById('errorMessage').textContent = getErrorMessage(error);
