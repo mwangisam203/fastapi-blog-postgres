@@ -64,6 +64,9 @@ class Post(Base):
     )
 
     likes: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    comments_count: Mapped[int] = mapped_column(
+        Integer, default=0, server_default="0"
+    )
     is_announcement: Mapped[bool] = mapped_column(
         Boolean, default=False, server_default="false"
     )
