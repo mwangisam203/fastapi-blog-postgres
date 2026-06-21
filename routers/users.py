@@ -394,6 +394,23 @@ async def delete_user(
 
     old_filename = user.image_file
 
+    comment_count_result = await db.execute(
+        select(models.Comment.post_id, func.count(models.Comment.id))
+        .where(models.Comment.user_id == user_id)
+        .group_by(models.Comment.post_id)
+    )
+    comment_counts = dict(comment_count_result.all())
+    if comment_counts:
+        posts_result = await db.execute(
+            select(models.Post)
+            .where(models.Post.id.in_(comment_counts))
+            .with_for_update()
+        )
+        for post in posts_result.scalars().all():
+            post.comments_count = max(
+                post.comments_count - comment_counts[post.id], 0
+            )
+
     await db.delete(user)
     await db.commit()
 
