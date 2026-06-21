@@ -268,7 +268,7 @@ async def get_comments(
         select(models.Comment)
         .options(selectinload(models.Comment.author))
         .where(models.Comment.post_id == post_id)
-        .order_by(models.Comment.date_posted.asc(), models.Comment.id.asc())
+        .order_by(models.Comment.date_posted.desc(), models.Comment.id.desc())
         .offset(skip)
         .limit(limit)
     )
