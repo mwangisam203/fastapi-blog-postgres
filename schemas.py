@@ -56,6 +56,7 @@ class PostResponse(PostBase):
     user_id: int
     date_posted: datetime
     likes: int
+    comments_count: int
     is_announcement: bool
     author: UserPublic
 
