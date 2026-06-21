@@ -19,6 +19,14 @@
                     {% if post.is_announcement %}<span class="badge text-bg-info fs-6">Announcement</span>{% endif %}
                 </h2>
                 <p class="article-content">{{ post.content }}</p>
+                <button type="button"
+                        class="btn btn-sm btn-outline-secondary like-button"
+                        data-like-post-id="{{ post.id }}"
+                        aria-pressed="false"
+                        aria-label="Like this post">
+                    <span class="like-icon" aria-hidden="true">♡</span>
+                    <span class="like-count">{{ post.likes }}</span>
+                </button>
                 <div id="postActions" class="post-actions mt-3 pt-3 border-top d-none">
                     <button type="button"
                             class="btn btn-outline-secondary me-1"
