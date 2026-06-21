@@ -294,10 +294,13 @@ async def create_comment(
     current_user: CurrentUser,
     db: Annotated[AsyncSession, Depends(get_db)],
 ):
-    post_exists = await db.scalar(
-        select(models.Post.id).where(models.Post.id == post_id)
+    result = await db.execute(
+        select(models.Post)
+        .where(models.Post.id == post_id)
+        .with_for_update()
     )
-    if post_exists is None:
+    post = result.scalars().first()
+    if post is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Post not found")
 
     comment = models.Comment(
@@ -306,6 +309,7 @@ async def create_comment(
         post_id=post_id,
     )
     db.add(comment)
+    post.comments_count += 1
     await db.commit()
     await db.refresh(comment, attribute_names=["author"])
     return comment
@@ -365,5 +369,13 @@ async def delete_comment(
             detail="Not authorized to delete this comment",
         )
 
+    result = await db.execute(
+        select(models.Post)
+        .where(models.Post.id == post_id)
+        .with_for_update()
+    )
+    post = result.scalars().first()
+    if post:
+        post.comments_count = max(post.comments_count - 1, 0)
     await db.delete(comment)
     await db.commit()
