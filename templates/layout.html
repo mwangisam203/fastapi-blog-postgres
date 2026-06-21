@@ -302,6 +302,13 @@
             import { initializeLikeButtons } from '/static/js/likes.js';
             initializeLikeButtons();
         </script>
+        <script type="module">
+            import { formatDateTime } from '/static/js/utils.js?v=3';
+            document.querySelectorAll('time.local-datetime').forEach((element) => {
+                element.textContent = formatDateTime(element.dateTime);
+                element.title = `Your local time: ${element.textContent}`;
+            });
+        </script>
         <!-- Create Post Form Handler -->
         <script type="module">
             import {
