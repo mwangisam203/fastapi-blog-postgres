@@ -21,6 +21,14 @@
             {% if post.is_announcement %}<span class="badge text-bg-info fs-6">Announcement</span>{% endif %}
           </h2>
           <p class="article-content">{{ post.content }}</p>
+          <button type="button"
+                  class="btn btn-sm btn-outline-secondary like-button"
+                  data-like-post-id="{{ post.id }}"
+                  aria-pressed="false"
+                  aria-label="Like this post">
+            <span class="like-icon" aria-hidden="true">♡</span>
+            <span class="like-count">{{ post.likes }}</span>
+          </button>
         </div>
       </div>
     </article>
@@ -43,6 +51,7 @@
 {% block scripts %}
   <script type="module">
   import { escapeHtml, formatDate } from '/static/js/utils.js?v=2';
+  import { initializeLikeButtons, likeButtonHtml } from '/static/js/likes.js';
 
   // Pagination state - initialized from server-rendered values
   let currentOffset = {{ limit }};  // Start after server-rendered posts
@@ -69,6 +78,7 @@
               ${post.is_announcement ? '<span class="badge text-bg-info fs-6">Announcement</span>' : ''}
             </h2>
             <p class="article-content">${escapeHtml(post.content)}</p>
+            ${likeButtonHtml(post)}
           </div>
         </div>
       </article>
@@ -99,6 +109,7 @@
       for (const post of data.posts) {
         postsContainer.insertAdjacentHTML('beforeend', createPostHTML(post));
       }
+      initializeLikeButtons(postsContainer);
 
       // Update pagination state
       currentOffset += data.posts.length;
