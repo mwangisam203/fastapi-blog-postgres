@@ -38,6 +38,12 @@
         <span class="like-icon" aria-hidden="true">♡</span>
         <span class="like-count">{{ post.likes }}</span>
       </button>
+      <a class="btn btn-sm btn-outline-secondary mt-3"
+         href="{{ url_for('post_page', post_id=post.id) }}#comments"
+         aria-label="View comments">
+        <span aria-hidden="true">💬</span>
+        <span>{{ post.comments_count }}</span>
+      </a>
     </article>
   {% else %}
     <div class="content-section py-4 px-4 mb-4 text-center text-body-secondary">
