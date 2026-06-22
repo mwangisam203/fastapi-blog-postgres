@@ -1,4 +1,13 @@
-import { getToken } from "/static/js/auth.js";
+import { getAuthHeaders } from "/static/js/auth.js?v=2";
+import { getErrorMessage, showModal } from "/static/js/utils.js?v=3";
+
+function showLikeError(message) {
+  const errorMessage = document.getElementById("errorMessage");
+  if (errorMessage && document.getElementById("errorModal")) {
+    errorMessage.textContent = message;
+    showModal("errorModal");
+  }
+}
 
 function setButtonState(button, liked, likes) {
   button.classList.toggle("btn-primary", liked);
@@ -9,7 +18,7 @@ function setButtonState(button, liked, likes) {
   button.querySelector(".like-count").textContent = likes;
 }
 
-async function loadLikedState(buttons, token) {
+async function loadLikedState(buttons) {
   const url = new URL("/api/posts/likes/me", window.location.origin);
   buttons.forEach((button) => {
     url.searchParams.append("post_ids", button.dataset.likePostId);
@@ -17,7 +26,7 @@ async function loadLikedState(buttons, token) {
 
   try {
     const response = await fetch(url, {
-      headers: { Authorization: `Bearer ${token}` },
+      headers: getAuthHeaders(),
     });
     if (!response.ok) return;
     const likedIds = new Set((await response.json()).post_ids.map(String));
@@ -40,26 +49,23 @@ export function initializeLikeButtons(root = document) {
   buttons.forEach((button) => {
     button.dataset.likeReady = "true";
     button.addEventListener("click", async () => {
-      const token = getToken();
-      if (!token) {
-        window.location.href = "/login";
-        return;
-      }
-
       button.disabled = true;
       try {
         const response = await fetch(
           `/api/posts/${button.dataset.likePostId}/like`,
           {
             method: "POST",
-            headers: { Authorization: `Bearer ${token}` },
+            headers: getAuthHeaders(),
           },
         );
         if (response.status === 401) {
           window.location.href = "/login";
           return;
         }
-        if (!response.ok) throw new Error("Unable to update like");
+        if (!response.ok) {
+          const error = await response.json().catch(() => ({}));
+          throw new Error(getErrorMessage(error));
+        }
         const data = await response.json();
         document
           .querySelectorAll(`[data-like-post-id="${data.post_id}"]`)
@@ -68,14 +74,14 @@ export function initializeLikeButtons(root = document) {
           });
       } catch (error) {
         console.error("Unable to update like:", error);
+        showLikeError(error.message || "Unable to update like. Please try again.");
       } finally {
         button.disabled = false;
       }
     });
   });
 
-  const token = getToken();
-  if (token) loadLikedState(buttons, token);
+  loadLikedState(buttons);
 }
 
 export function likeButtonHtml(post) {
