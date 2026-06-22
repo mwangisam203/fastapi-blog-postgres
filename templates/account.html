@@ -195,10 +195,10 @@
 <script type="module">
   import {
     getCurrentUser,
-    getToken,
+    getAuthHeaders,
     logout,
     clearUserCache,
-  } from "/static/js/auth.js";
+  } from "/static/js/auth.js?v=2";
   import { getErrorMessage, showModal, hideModal } from "/static/js/utils.js";
 
   let currentUserId = null;
@@ -249,12 +249,6 @@
 
   // Upload Profile Picture Handler
   uploadBtn.addEventListener("click", async () => {
-    const token = getToken();
-    if (!token) {
-      window.location.href = "/login";
-      return;
-    }
-
     const file = pictureInput.files[0];
     if (!file) {
       return;
@@ -272,7 +266,7 @@
         method: "PATCH",
         headers: {
           // Don't set Content-Type — browser sets multipart boundary automatically
-          Authorization: `Bearer ${token}`,
+          ...getAuthHeaders(),
         },
         body: formData,
       });
@@ -323,12 +317,6 @@
   updateForm.addEventListener("submit", async (event) => {
     event.preventDefault();
 
-    const token = getToken();
-    if (!token) {
-      window.location.href = "/login";
-      return;
-    }
-
     const formData = new FormData(updateForm);
     const userData = Object.fromEntries(formData.entries());
 
@@ -337,7 +325,7 @@
         method: "PATCH",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
+          ...getAuthHeaders(),
         },
         body: JSON.stringify(userData),
       });
@@ -387,18 +375,10 @@
   document
     .getElementById("confirmDeleteAccount")
     .addEventListener("click", async () => {
-      const token = getToken();
-      if (!token) {
-        window.location.href = "/login";
-        return;
-      }
-
       try {
         const response = await fetch(`/api/users/${currentUserId}`, {
           method: "DELETE",
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
+          headers: getAuthHeaders(),
         });
 
         if (response.status === 401) {
@@ -416,6 +396,7 @@
 
         if (response.status === 204) {
           // Account deleted successfully
+          await fetch("/api/users/logout", { method: "POST" });
           localStorage.removeItem("access_token");
           window.location.href = "/";
         } else {
@@ -442,12 +423,6 @@
   changePasswordForm.addEventListener("submit", async (event) => {
     event.preventDefault();
 
-    const token = getToken();
-    if (!token) {
-      window.location.href = "/login";
-      return;
-    }
-
     const currentPassword = document.getElementById("currentPassword").value;
     const newPassword = document.getElementById("newPassword").value;
     const confirmNewPassword =
@@ -470,7 +445,7 @@
         method: "PATCH",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
+          ...getAuthHeaders(),
         },
         body: JSON.stringify({
           current_password: currentPassword,
