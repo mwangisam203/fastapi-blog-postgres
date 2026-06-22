@@ -105,3 +105,38 @@ async def test_forgot_password_sends_email(client: AsyncClient):
         assert call_kwargs["to_email"] == "test@example.com"
         assert call_kwargs["username"] == "testuser"
         assert "token" in call_kwargs
+
+
+@pytest.mark.anyio
+async def test_partial_user_update_accepts_single_field(client: AsyncClient):
+    user = await create_test_user(client)
+    headers = auth_header(await login_user(client))
+
+    response = await client.patch(
+        f"/api/users/{user['id']}",
+        json={"username": "updateduser"},
+        headers=headers,
+    )
+    assert response.status_code == 200
+    assert response.json()["username"] == "updateduser"
+    assert response.json()["email"] == "test@example.com"
+
+
+@pytest.mark.anyio
+async def test_login_cookie_authentication_and_logout(client: AsyncClient):
+    await create_test_user(client)
+    response = await client.post(
+        "/api/users/token",
+        data={"username": "test@example.com", "password": "testpassword123"},
+    )
+    assert response.status_code == 200
+    assert "HttpOnly" in response.headers["set-cookie"]
+
+    response = await client.get("/api/users/me")
+    assert response.status_code == 200
+    assert response.json()["username"] == "testuser"
+
+    response = await client.post("/api/users/logout")
+    assert response.status_code == 204
+    response = await client.get("/api/users/me")
+    assert response.status_code == 401
