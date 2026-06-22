@@ -9,7 +9,7 @@ This project started as a simple blog page and has grown into a real web app wit
 - Shows a home feed of blog posts ordered by newest first.
 - Provides dedicated announcement and monthly post-calendar views.
 - Loads more posts with JavaScript pagination instead of a full page refresh.
-- Lets users register, log in, and keep a JWT access token in localStorage.
+- Lets users register and log in with JWTs stored in HttpOnly cookies.
 - Lets authenticated users create posts from the navbar modal.
 - Lets post owners edit or delete their own posts.
 - Lets authenticated users comment on posts and edit or delete their own comments.
@@ -38,7 +38,7 @@ This project started as a simple blog page and has grown into a real web app wit
 | ORM | SQLAlchemy 2.x async models and sessions |
 | Migrations | Alembic |
 | Validation | Pydantic |
-| Auth | JWT, OAuth2 password form, pwdlib Argon2 password hashing |
+| Auth | JWT HttpOnly cookies, OAuth2 bearer support, pwdlib Argon2 password hashing |
 | Templates | Jinja2 |
 | Frontend | HTML, CSS, Bootstrap 5, vanilla JavaScript modules |
 | Images | Pillow for profile image processing, S3-compatible storage through boto3 |
@@ -197,6 +197,7 @@ DATABASE_URL=postgresql+psycopg://postgres:postgres@localhost:5432/fastapi_blog
 SECRET_KEY=change-this-to-a-long-random-secret
 ALGORITHM=HS256
 ACCESS_TOKEN_EXPIRE_MINUTES=30
+AUTH_COOKIE_SECURE=false
 POSTS_PER_PAGE=10
 RESET_TOKEN_EXPIRE_MINUTES=60
 FRONTEND_URL=http://localhost:8000
@@ -205,6 +206,9 @@ S3_REGION=us-east-1
 S3_ACCESS_KEY_ID=your-access-key
 S3_SECRET_ACCESS_KEY=your-secret-key
 ```
+
+Set `AUTH_COOKIE_SECURE=true` in production so authentication cookies are sent
+only over HTTPS. If omitted, the app infers this from an `https://` frontend URL.
 
 For quick local SQLite development, use:
 
@@ -434,13 +438,9 @@ Login sends form data to:
 POST /api/users/token
 ```
 
-On success, the frontend stores the JWT access token in:
-
-```text
-localStorage.access_token
-```
-
-Authenticated requests send:
+On success, the website stores the JWT in an HttpOnly cookie. Swagger and
+external API clients can continue to send the returned token as an OAuth2 bearer
+token:
 
 ```http
 Authorization: Bearer <token>
