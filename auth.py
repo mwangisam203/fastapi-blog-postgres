@@ -11,7 +11,7 @@ import models
 from database import get_db
 
 from typing import Annotated
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, HTTPException, Request, status
 
 import hashlib
 import secrets
@@ -19,7 +19,8 @@ import secrets
 password_hash = PasswordHash.recommended()
 
 
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="api/users/token")
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="api/users/token", auto_error=False)
+AUTH_COOKIE_NAME = "access_token"
 
 
 def hash_password(password: str) -> str:
@@ -72,9 +73,17 @@ def verify_access_token(token: str) -> str | None:
 
 
 async def get_current_user(
-    token: Annotated[str, Depends(oauth2_scheme)],
+    request: Request,
+    token: Annotated[str | None, Depends(oauth2_scheme)],
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> models.User:
+    token = token or request.cookies.get(AUTH_COOKIE_NAME)
+    if token is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Not authenticated",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
     user_id = verify_access_token(token)
     if user_id is None:
         raise HTTPException(
