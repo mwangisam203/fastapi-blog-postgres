@@ -62,7 +62,7 @@
 {% endif %} {% endblock content %} {% block scripts %}
 <script type="module">
   import { escapeHtml, formatDateTime } from '/static/js/utils.js?v=3';
-  import { commentCountHtml, initializeLikeButtons, likeButtonHtml } from '/static/js/likes.js';
+  import { commentCountHtml, initializeLikeButtons, likeButtonHtml } from '/static/js/likes.js?v=2';
 
   const userId = {{ user.id }};
   let currentOffset = {{ limit }};
