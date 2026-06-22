@@ -62,6 +62,7 @@ async def test_comments_require_authentication_to_create(client: AsyncClient):
     await create_test_user(client)
     headers = auth_header(await login_user(client))
     post_id = await create_post(client, headers)
+    client.cookies.clear()
 
     response = await client.post(
         f"/api/posts/{post_id}/comments",
