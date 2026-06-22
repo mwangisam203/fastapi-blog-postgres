@@ -46,10 +46,8 @@
         });
 
         if (response.ok) {
-          const data = await response.json();
-
-          // Store token in localStorage
-          localStorage.setItem('access_token', data.access_token);
+          // Authentication is stored in an HttpOnly cookie by the server.
+          localStorage.removeItem('access_token');
 
           // Show success modal and redirect to home
           document.getElementById('successMessage').textContent =
