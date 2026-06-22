@@ -59,7 +59,7 @@
 {% block scripts %}
   <script type="module">
   import { escapeHtml, formatDateTime } from '/static/js/utils.js?v=3';
-  import { commentCountHtml, initializeLikeButtons, likeButtonHtml } from '/static/js/likes.js';
+  import { commentCountHtml, initializeLikeButtons, likeButtonHtml } from '/static/js/likes.js?v=2';
 
   // Pagination state - initialized from server-rendered values
   let currentOffset = {{ limit }};  // Start after server-rendered posts
