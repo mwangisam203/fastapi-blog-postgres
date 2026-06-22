@@ -275,7 +275,7 @@
         </script>
         <!-- Auth State Management -->
         <script type="module">
-            import { getCurrentUser } from '/static/js/auth.js';
+            import { getCurrentUser } from '/static/js/auth.js?v=2';
 
             async function updateAuthUI() {
                 const user = await getCurrentUser();
@@ -299,7 +299,7 @@
             updateAuthUI();
         </script>
         <script type="module">
-            import { initializeLikeButtons } from '/static/js/likes.js';
+            import { initializeLikeButtons } from '/static/js/likes.js?v=2';
             initializeLikeButtons();
         </script>
         <script type="module">
@@ -316,19 +316,13 @@
             hideModal,
             showModal,
             } from "/static/js/utils.js";
-            import { getToken } from '/static/js/auth.js';
+            import { getAuthHeaders } from '/static/js/auth.js?v=2';
 
             const createForm = document.getElementById("createPostForm");
 
             createForm.addEventListener("submit", async (event) => {
             // Stop default form submission - we'll handle it with JavaScript
             event.preventDefault();
-
-            const token = getToken();
-            if (!token) {
-                window.location.href = '/login';
-                return;
-            }
 
             // Gather form values into a plain object {title: "...", content: "..."}
             const formData = new FormData(createForm);
@@ -341,7 +335,7 @@
                 method: "POST",
                 headers: {
                     "Content-Type": "application/json",
-                    'Authorization': `Bearer ${token}`,
+                    ...getAuthHeaders(),
                 },
                 body: JSON.stringify(postData),
                 });
