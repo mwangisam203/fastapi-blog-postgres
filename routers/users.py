@@ -8,6 +8,7 @@ from fastapi import (
     UploadFile,
     Query,
     BackgroundTasks,
+    Response,
 )
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -41,6 +42,7 @@ from image_utils import (
 )
 
 from auth import (
+    AUTH_COOKIE_NAME,
     create_access_token,
     hash_password,
     verify_password,
@@ -100,6 +102,7 @@ async def create_user(user: UserCreate, db: Annotated[AsyncSession, Depends(get_
 
 @router.post("/token", response_model=Token)
 async def login_for_access_token(
+    response: Response,
     form_data: Annotated[OAuth2PasswordRequestForm, Depends()],
     db: Annotated[AsyncSession, Depends(get_db)],
 ):
@@ -127,7 +130,26 @@ async def login_for_access_token(
         data={"sub": str(user.id)},
         expires_delta=access_token_expires,
     )
+    secure_cookie = (
+        settings.auth_cookie_secure
+        if settings.auth_cookie_secure is not None
+        else settings.frontend_url.lower().startswith("https://")
+    )
+    response.set_cookie(
+        key=AUTH_COOKIE_NAME,
+        value=access_token,
+        max_age=settings.access_token_expire_minutes * 60,
+        httponly=True,
+        secure=secure_cookie,
+        samesite="lax",
+        path="/",
+    )
     return Token(access_token=access_token, token_type="bearer")
+
+
+@router.post("/logout", status_code=status.HTTP_204_NO_CONTENT)
+async def logout(response: Response):
+    response.delete_cookie(key=AUTH_COOKIE_NAME, path="/", samesite="lax")
 
 
 @router.get("/me", response_model=UserPrivate)
@@ -332,7 +354,7 @@ async def update_user(
             detail="User not found",
         )
     if (
-        user_update.username.lower() is not None
+        user_update.username is not None
         and user_update.username.lower() != user.username.lower()
     ):
         result = await db.execute(
@@ -347,7 +369,7 @@ async def update_user(
                 detail="Username already exists",
             )
     if (
-        user_update.email.lower() is not None
+        user_update.email is not None
         and user_update.email.lower() != user.email.lower()
     ):
         result = await db.execute(
@@ -404,12 +426,29 @@ async def delete_user(
         posts_result = await db.execute(
             select(models.Post)
             .where(models.Post.id.in_(comment_counts))
+            .order_by(models.Post.id)
             .with_for_update()
         )
         for post in posts_result.scalars().all():
             post.comments_count = max(
                 post.comments_count - comment_counts[post.id], 0
             )
+
+    like_count_result = await db.execute(
+        select(models.Like.post_id, func.count(models.Like.id))
+        .where(models.Like.user_id == user_id)
+        .group_by(models.Like.post_id)
+    )
+    like_counts = dict(like_count_result.all())
+    if like_counts:
+        posts_result = await db.execute(
+            select(models.Post)
+            .where(models.Post.id.in_(like_counts))
+            .order_by(models.Post.id)
+            .with_for_update()
+        )
+        for post in posts_result.scalars().all():
+            post.likes = max(post.likes - like_counts[post.id], 0)
 
     await db.delete(user)
     await db.commit()
