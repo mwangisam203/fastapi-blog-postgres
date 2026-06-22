@@ -60,6 +60,7 @@ async def test_like_requires_authentication(client: AsyncClient):
     await create_test_user(client)
     headers = auth_header(await login_user(client))
     post_id = await create_post(client, headers)
+    client.cookies.clear()
 
     response = await client.post(f"/api/posts/{post_id}/like")
     assert response.status_code == 401
@@ -72,3 +73,27 @@ async def test_like_missing_post_returns_not_found(client: AsyncClient):
 
     response = await client.post("/api/posts/999999/like", headers=headers)
     assert response.status_code == 404
+
+
+@pytest.mark.anyio
+async def test_deleting_user_updates_like_count(client: AsyncClient):
+    owner = await create_test_user(
+        client, username="owner", email="owner@example.com"
+    )
+    owner_headers = auth_header(await login_user(client, email="owner@example.com"))
+    post_id = await create_post(client, owner_headers)
+
+    liker = await create_test_user(
+        client, username="liker", email="liker@example.com"
+    )
+    liker_headers = auth_header(await login_user(client, email="liker@example.com"))
+    await client.post(f"/api/posts/{post_id}/like", headers=liker_headers)
+
+    response = await client.delete(
+        f"/api/users/{liker['id']}", headers=liker_headers
+    )
+    assert response.status_code == 204
+
+    response = await client.get(f"/api/posts/{post_id}")
+    assert response.status_code == 200
+    assert response.json()["likes"] == 0
