@@ -1,34 +1,25 @@
 let currentUser = null;
 let fetchPromise = null;
 
+// Bearer headers remain temporarily supported for users with an older session.
+export function getAuthHeaders() {
+  const legacyToken = localStorage.getItem("access_token");
+  return legacyToken ? { Authorization: `Bearer ${legacyToken}` } : {};
+}
+
 export async function getCurrentUser() {
-  if (currentUser) {
-    return currentUser;
-  }
-
-  // Return in-progress fetch to prevent duplicate API calls
-  if (fetchPromise) {
-    return fetchPromise;
-  }
-
-  const token = localStorage.getItem("access_token");
-  if (!token) {
-    return null;
-  }
+  if (currentUser) return currentUser;
+  if (fetchPromise) return fetchPromise;
 
   fetchPromise = (async () => {
     try {
       const response = await fetch("/api/users/me", {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
+        headers: getAuthHeaders(),
       });
-
       if (response.ok) {
         currentUser = await response.json();
         return currentUser;
       }
-
       localStorage.removeItem("access_token");
       return null;
     } catch (error) {
@@ -38,22 +29,20 @@ export async function getCurrentUser() {
       fetchPromise = null;
     }
   })();
-
   return fetchPromise;
 }
 
-export function logout() {
-  localStorage.removeItem("access_token");
-  currentUser = null;
-  window.location.href = "/";
-}
-
-export function getToken() {
-  return localStorage.getItem("access_token");
-}
-
-export function setToken(token) {
-  localStorage.setItem("access_token", token);
+export async function logout() {
+  try {
+    await fetch("/api/users/logout", {
+      method: "POST",
+      headers: getAuthHeaders(),
+    });
+  } finally {
+    localStorage.removeItem("access_token");
+    currentUser = null;
+    window.location.href = "/";
+  }
 }
 
 export function clearUserCache() {
